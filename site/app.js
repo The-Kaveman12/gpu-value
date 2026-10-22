@@ -207,17 +207,58 @@ function renderSources() {
 <span class="pill">Specs <b>${DATA.gpus.length.toLocaleString()} GPUs</b> · TechPowerUp DB</span>`;
   $('#built').textContent = `Site built ${new Date(DATA.built).toLocaleString()}`;
 
-  const banner = $('#banner');
-  banner.hidden = false;
-  banner.classList.remove('info');
   if (!parts.length) {
-    banner.textContent = 'Prices haven’t been fetched yet, so value is calculated from launch MSRP for now.';
+    showBanner('no-prices', 'Prices haven’t been fetched yet, so value is calculated from launch MSRP for now.');
   } else if (!anyFresh) {
-    banner.textContent = `Prices were last refreshed ${ago(PRICES.updated)}. The scheduled update may be failing.`;
+    showBanner(`stale-${PRICES.updated}`, `Prices were last refreshed ${ago(PRICES.updated)}. The scheduled update may be failing.`);
   } else if (src.ebay?.status === 'unconfigured') {
-    banner.classList.add('info');
-    banner.textContent = 'New prices come from Tom’s Hardware’s US retail price tracker and used prices from a daily snapshot of eBay listings. Live eBay data will be added once its API is connected. Hover over a price to see its source.';
-  } else banner.hidden = true;
+    showBanner('ebay-unconfigured', 'New prices come from Tom’s Hardware’s US retail price tracker and used prices from a daily snapshot of eBay listings. Live eBay data will be added once its API is connected. Hover over a price to see its source.', 'info');
+  } else showBanner(null);
+}
+
+// --- Banner and theme (choices remembered per browser) ---------------------------
+const store = {
+  get: (k) => { try { return localStorage.getItem(k); } catch { return null; } },
+  set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode etc. */ } },
+};
+
+/** Show a message unless the visitor dismissed this one (by key) before. */
+function showBanner(key, text, kind = 'warn') {
+  const banner = $('#banner');
+  banner.hidden = !key || store.get('dismissedBanner') === key;
+  if (banner.hidden) return;
+  banner.dataset.key = key;
+  banner.classList.toggle('info', kind === 'info');
+  $('#bannerText').textContent = text;
+}
+
+const prefersDark = () => globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
+const currentTheme = () => document.documentElement?.dataset.theme ?? (prefersDark() ? 'dark' : 'light');
+
+function syncThemeToggle() {
+  const next = currentTheme() === 'dark' ? 'light' : 'dark';
+  const btn = $('#themeToggle');
+  btn.setAttribute('aria-label', `Switch to ${next} mode`);
+  btn.title = `Switch to ${next} mode`;
+  $('.theme-label').textContent = next === 'dark' ? 'Dark' : 'Light';
+}
+
+function bindChrome() {
+  $('#bannerClose').addEventListener('click', () => {
+    store.set('dismissedBanner', $('#banner').dataset.key);
+    $('#banner').hidden = true;
+  });
+  $('#themeToggle').addEventListener('click', () => {
+    const next = currentTheme() === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    store.set('theme', next);
+    syncThemeToggle();
+  });
+  // Follow the OS setting live until the visitor picks a theme.
+  globalThis.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => {
+    if (!store.get('theme')) syncThemeToggle();
+  });
+  syncThemeToggle();
 }
 
 function render() {
@@ -327,6 +368,7 @@ async function main() {
   const repo = document.querySelector('meta[name="repo"]')?.content;
   if (repo) $('#repoLink').href = repo;
 
+  bindChrome();
   renderSources();
   bind();
   render();

@@ -240,3 +240,30 @@ button, input, select { font: inherit; color: inherit; }
 .banner.info { background: var(--perf-soft); border-color: color-mix(in srgb, var(--perf) 30%, transparent); }
 .bench.quotes { margin-top: 12px; }
 .bench.quotes td:first-child { cursor: help; }
+
+/* Header bar, theme toggle, dismissible banner ------------------------------ */
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.theme-toggle {
+  display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px 0 10px;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text);
+  box-shadow: var(--shadow); cursor: pointer; font-size: 13px; font-weight: 500;
+}
+.theme-toggle:hover { border-color: var(--faint); }
+.theme-toggle:focus-visible, .banner-close:focus-visible { outline: 2px solid var(--perf); outline-offset: 2px; }
+.theme-toggle svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* Show the icon of the theme you'd switch TO. */
+.theme-toggle .i-sun { display: none; }
+:root[data-theme="dark"] .theme-toggle .i-sun { display: block; }
+:root[data-theme="dark"] .theme-toggle .i-moon { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-toggle .i-sun { display: block; }
+  :root:not([data-theme="light"]) .theme-toggle .i-moon { display: none; }
+}
+.banner:not([hidden]) { display: flex; align-items: flex-start; gap: 12px; }
+.banner #bannerText { flex: 1; }
+.banner-close {
+  flex: none; width: 24px; height: 24px; margin: -2px -4px -2px 0; display: grid; place-items: center;
+  border: 0; border-radius: 6px; background: none; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer;
+}
+.banner-close:hover { background: color-mix(in srgb, var(--text) 10%, transparent); color: var(--text); }
+body, .list, .pick, .controls, .search input, .pill, .seg, .chips button { transition: background-color .2s, border-color .2s, color .2s; }

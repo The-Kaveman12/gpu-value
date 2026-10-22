@@ -85,6 +85,10 @@ test('page renders live multi-source prices and an opened detail panel', async (
     querySelector: (sel) => (sel.startsWith('meta') || sel.startsWith('.row.item[') ? null : elements.get(sel) ?? elements.set(sel, el(sel)).get(sel)),
     querySelectorAll: () => [],
   };
+  globalThis.document.documentElement = { dataset: {} };
+  const saved = new Map();
+  globalThis.localStorage = { getItem: (k) => saved.get(k) ?? null, setItem: (k, v) => saved.set(k, String(v)) };
+  globalThis.matchMedia = () => ({ matches: false, addEventListener() {} });
   globalThis.CSS = { escape: (s) => s };
   globalThis.location = { search: '', pathname: '/' };
   globalThis.history = { replaceState() {} };
@@ -104,4 +108,20 @@ test('page renders live multi-source prices and an opened detail panel', async (
   assert.match(rows, /All price sources/);
   assert.match(rows, /Retail \(Tom's Hardware tracker\)/);
   assert.doesNotMatch(rows, /undefined|NaN/);
+
+  // Theme toggle flips light <-> dark and remembers the choice.
+  listeners.get('#themeToggle:click')();
+  assert.equal(document.documentElement.dataset.theme, 'dark');
+  assert.equal(saved.get('theme'), 'dark');
+  assert.equal(elements.get('.theme-label').textContent, 'Light');
+  listeners.get('#themeToggle:click')();
+  assert.equal(document.documentElement.dataset.theme, 'light');
+
+  // The info banner can be dismissed, and that's remembered.
+  const banner = elements.get('#banner');
+  assert.equal(banner.hidden, false);
+  assert.match(elements.get('#bannerText').textContent, /Tom’s Hardware/);
+  listeners.get('#bannerClose:click')();
+  assert.equal(banner.hidden, true);
+  assert.equal(saved.get('dismissedBanner'), 'ebay-unconfigured');
 });
