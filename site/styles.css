@@ -378,3 +378,5 @@ button, input, select { font: inherit; color: inherit; }
 @media (max-width: 680px) {
   .dd-menu { position: fixed; left: 16px; right: 16px; top: auto; width: auto; margin-top: 6px; }
   }
+.review-links { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; font-size: 13px; }
+.review-links span { color: var(--muted); font-size: 12px; width: 100%; }

@@ -114,6 +114,8 @@ test('page renders live multi-source prices and an opened detail panel', async (
   assert.match(rows, /<details class="disclosure"><summary>Full specifications/);
   assert.match(rows, /<details class="disclosure"><summary>Price sources &amp; listings/);
   assert.match(rows, />Retail tracker</);
+  assert.match(rows, /class="review-links"/);
+  assert.match(rows, /site%3Atechpowerup.com%2Freview/);
   assert.match(rows, /class="price-tile"><span>New<\/span><b>\$/);
   assert.doesNotMatch(rows, /undefined|NaN/);
 

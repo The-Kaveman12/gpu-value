@@ -164,6 +164,22 @@ function fullSpecs(g) {
   return `<details class="disclosure"><summary>Full specifications</summary><div class="spec-groups">${groups}</div></details>`;
 }
 
+// Per-game results live in full reviews. Search links (rather than guessed
+// review URLs) always land on the right card.
+function reviewLinks(g) {
+  const name = (g.benchmarkName ?? g.name).replace(/^Intel /, '');
+  const google = (site) => `https://www.google.com/search?q=${encodeURIComponent(`"${name}" review site:${site}`)}`;
+  const links = [
+    ['TechPowerUp', google('techpowerup.com/review')],
+    ["Tom's Hardware", google('tomshardware.com')],
+    ['TechSpot', google('techspot.com/review')],
+    ['Hardware Unboxed', `https://www.youtube.com/results?search_query=${encodeURIComponent(`Hardware Unboxed ${name} review`)}`],
+  ];
+  return `<div class="review-links"><span>Per-game results in full reviews:</span>${links
+    .map(([label, url]) => `<a href="${esc(url)}" target="_blank" rel="noopener">${label} ↗</a>`)
+    .join('')}</div>`;
+}
+
 function benchTable(g) {
   if (!g.perf) return '<p class="note">Not in Tom\'s Hardware\'s benchmark hierarchy, so this card has no performance or value score.</p>';
   const cell = (kind, res) => {
@@ -222,7 +238,7 @@ ${techChips(g) ? `<section>${techChips(g)}</section>` : ''}
 ${fullSpecs(g)}
 <div class="links">${g.url ? `<a href="${esc(g.url)}" target="_blank" rel="noopener">TechPowerUp specs ↗</a>` : ''}<a href="https://www.ebay.com/sch/27386/i.html?_nkw=${ebayQ}&LH_BIN=1" target="_blank" rel="noopener">Search eBay ↗</a></div>
 </div><div class="d-col" role="cell">
-<section><h4>Game benchmarks</h4>${benchTable(g)}</section>
+<section><h4>Game benchmarks</h4>${benchTable(g)}${reviewLinks(g)}</section>
 ${g.perf ? `<section><h4>Prices</h4>${priceTiles(g)}</section>${priceSources(g)}` : ''}
 </div></div>`;
 }
