@@ -57,7 +57,7 @@ export function featuresFor(g) {
     add('frame-gen', 'XeSS Frame Generation');
     add('multi-frame-gen', 'XeSS 3 Multi-Frame Generation');
     add('av1-encode', 'QSV AV1');
-    add('vrr', 'Adaptive-Sync (FreeSync / G-SYNC Compatible monitors)');
+    add('vrr', 'Adaptive-Sync');
   }
 
   if (g.directX === '12.2') add('hw-rt', 'DirectX 12 Ultimate');

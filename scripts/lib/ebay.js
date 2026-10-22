@@ -46,9 +46,10 @@ const SUFFIXES = new Set(['ti', 'super', 'xt', 'xtx', 'gre']);
 const BRAND_WORDS = new Set(['geforce', 'radeon', 'nvidia', 'amd', 'intel']);
 const VRAM_SIZES = new Set([2, 3, 4, 6, 8, 10, 12, 16, 20, 24, 32]);
 
-// Listings that aren't a single working card.
+// Listings that aren't a single working card. "Read" on its own almost always
+// flags a caveat ("*NO HDMI* *READ*").
 const REJECT =
-  /\b(for parts|parts only|broken|defective|not working|as is|for repair|box only|empty box|no gpu|no card|bracket|backplate|water ?block|cooler only|heatsink only|fan only|replacement fan|shroud|riser|cable|laptop|notebook|mobile|gaming pc|desktop pc|desktop computer|computer|prebuilt|tower|mining rig|lot of|read description|untested|mxm)\b/;
+  /\b(for parts|parts only|broken|defective|not working|as is|for repair|box only|empty box|no gpu|no card|bracket|backplate|water ?block|cooler only|heatsink only|fan only|replacement fan|shroud|riser|cable|laptop|notebook|mobile|gaming pc|desktop pc|desktop computer|computer|prebuilt|tower|mining rig|lot of|read description|read|untested|mxm|no hdmi|no display ?port|no dp|no video|no display|no signal|no output|artifact(s|ing)?|black screen)\b/;
 
 /** Lowercase a title and separate glued tokens ("RTX5070Ti" -> "rtx 5070 ti", "16GB" -> "16 gb"). */
 export function normalizeTitle(title) {

@@ -109,8 +109,12 @@ test('page renders live multi-source prices and an opened detail panel', async (
   const id = /data-id="([^"]+)"/.exec(picks)[1];
   listeners.get('#picks:click')({ target: { closest: () => ({ dataset: { id } }) } });
   const rows = elements.get('#rows').innerHTML;
-  assert.match(rows, /All price sources/);
-  assert.match(rows, /Retail \(Tom's Hardware tracker\)/);
+  assert.match(rows, /class="glance"/); // key specs up front
+  assert.match(rows, /class="tech-chips"/);
+  assert.match(rows, /<details class="disclosure"><summary>Full specifications/);
+  assert.match(rows, /<details class="disclosure"><summary>Price sources &amp; listings/);
+  assert.match(rows, />Retail tracker</);
+  assert.match(rows, /class="price-tile"><span>New<\/span><b>\$/);
   assert.doesNotMatch(rows, /undefined|NaN/);
 
   // Theme toggle flips light <-> dark and remembers the choice.

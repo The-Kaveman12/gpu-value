@@ -81,3 +81,11 @@ test('classify separates desktop cards from laptop, integrated and server parts'
   assert.equal(classify({ name: 'Radeon 780M', generation: 'Navi III IGP(Phoenix)' }), 'integrated');
   assert.equal(classify({ name: 'Arc B580', generation: 'Battlemage(Arc 5)' }), 'desktop');
 });
+
+test('titleMatches rejects listings flagged with defects or caveats', () => {
+  const xt = modelPattern('Radeon RX 9070 XT', { memoryGb: 16 });
+  assert.ok(titleMatches('Asus Radeon RX 9070 XT Prime OC 16GB GDDR6 Graphics Card', xt));
+  assert.ok(!titleMatches('ASROCK CHALLENGER AMD RADEON RX 9070XT 16GB GDDR6 DESKTOP GPU *NO HDMI* *READ*', xt));
+  assert.ok(!titleMatches('RX 9070 XT 16GB artifacting', xt));
+  assert.ok(!titleMatches('RX 9070 XT 16GB - no display output', xt));
+});

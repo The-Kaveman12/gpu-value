@@ -13,7 +13,9 @@ const BASIS_LABEL = { new: 'new', used: 'used', msrp: 'MSRP' };
 
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const money = (n) => (n == null ? '—' : `$${n.toLocaleString('en-US', { minimumFractionDigits: n < 100 ? 2 : 0, maximumFractionDigits: n < 100 ? 2 : 0 })}`);
+// Whole-dollar amounts without cents; otherwise keep the cents (so $599.99 never shows as $600).
+const money = (n) => (n == null ? '—' : `$${n.toLocaleString('en-US', Number.isInteger(n) ? { maximumFractionDigits: 0 } : { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`);
+const count = (v) => Number(v).toLocaleString('en-US');
 const fmtDate = (d) => (d ? new Date(`${d.slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'unknown');
 function ago(iso) {
   const h = (Date.now() - new Date(iso)) / 36e5;
@@ -107,87 +109,121 @@ function rowHtml(r, maxFps, maxValue) {
 </div>${isOpen ? detailHtml(r) : ''}`;
 }
 
-const SPEC_FIELDS = [
-  ['gpuName', 'GPU chip'], ['architecture', 'Architecture'], ['generation', 'Generation'], ['releaseDate', 'Release date', fmtDate],
-  ['processSize', 'Process', (v) => `${v} nm`], ['foundry', 'Foundry'], ['transistors', 'Transistors', (v) => `${v} B`], ['dieSize', 'Die size', (v) => `${v} mm²`],
-  ['memorySize', 'Memory', (v, g) => `${v} GB ${g.memoryType ?? ''}`], ['memoryBus', 'Memory bus', (v) => `${v}-bit`],
-  ['memoryBandwidth', 'Bandwidth', (v) => `${v} GB/s`], ['memoryClock', 'Memory clock', (v) => `${v} MHz`],
-  ['shaders', 'Shading units'], ['computeUnits', 'Compute units'], ['sms', 'SMs'], ['executionUnits', 'Execution units'],
-  ['tmus', 'TMUs'], ['rops', 'ROPs'], ['rtCores', 'RT cores'], ['tensorCores', 'Tensor cores'],
-  ['baseClock', 'Base clock', (v) => `${v} MHz`], ['boostClock', 'Boost clock', (v) => `${v} MHz`], ['l2Cache', 'L2 cache', (v) => `${v} MB`],
-  ['fp32', 'FP32', (v) => `${v} TFLOPS`], ['tdp', 'Board power', (v) => `${v} W`], ['suggestedPSU', 'Suggested PSU', (v) => `${v} W`],
-  ['powerConnectors', 'Power connectors'], ['slot', 'Slot width'], ['length', 'Length', (v) => `${v} mm`], ['busInterface', 'Interface'],
-  ['displayOutputs', 'Outputs'], ['directX', 'DirectX'], ['vulkan', 'Vulkan'], ['openGL', 'OpenGL'], ['shaderModel', 'Shader model'],
+const MHZ = (v) => `${count(v)} MHz`;
+const SPEC_GROUPS = [
+  ['Chip', [
+    ['gpuName', 'GPU chip'], ['architecture', 'Architecture'], ['generation', 'Generation'], ['releaseDate', 'Release date', fmtDate],
+    ['processSize', 'Process', (v) => `${v} nm`], ['foundry', 'Foundry'], ['transistors', 'Transistors', (v) => `${v} billion`], ['dieSize', 'Die size', (v) => `${v} mm²`],
+  ]],
+  ['Memory', [
+    ['memorySize', 'Size', (v, g) => `${v} GB ${g.memoryType ?? ''}`], ['memoryBus', 'Bus width', (v) => `${v}-bit`],
+    ['memoryBandwidth', 'Bandwidth', (v) => `${v} GB/s`], ['memoryClock', 'Clock', MHZ], ['l2Cache', 'L2 cache', (v) => `${v} MB`],
+  ]],
+  ['Compute', [
+    ['shaders', 'Shading units', count], ['computeUnits', 'Compute units', count], ['sms', 'SMs', count], ['executionUnits', 'Execution units', count],
+    ['tmus', 'TMUs', count], ['rops', 'ROPs', count], ['rtCores', 'RT cores', count], ['tensorCores', 'Tensor cores', count],
+    ['baseClock', 'Base clock', MHZ], ['boostClock', 'Boost clock', MHZ], ['fp32', 'FP32', (v) => `${v} TFLOPS`],
+  ]],
+  ['Board & power', [
+    ['tdp', 'Board power', (v) => `${v} W`], ['suggestedPSU', 'Suggested PSU', (v) => `${v} W`], ['powerConnectors', 'Power connectors'],
+    ['slot', 'Slot width'], ['length', 'Length', (v) => `${v} mm`], ['busInterface', 'Interface'],
+  ]],
+  ['Outputs & APIs', [
+    ['displayOutputs', 'Outputs'], ['directX', 'DirectX'], ['vulkan', 'Vulkan'], ['openGL', 'OpenGL'], ['shaderModel', 'Shader model'],
+  ]],
 ];
 
+const has = (v) => v != null && v !== '';
+
+function glance(g) {
+  const cores = g.shaders ? [g.shaders.toLocaleString(), 'Shading units'] : g.computeUnits ? [g.computeUnits, 'Compute units'] : null;
+  const tiles = [
+    g.memorySize && [`${g.memorySize} GB ${g.memoryType ?? ''}`, 'Memory'],
+    g.memoryBandwidth && [`${Math.round(g.memoryBandwidth)} GB/s`, 'Bandwidth'],
+    g.boostClock && [`${(g.boostClock / 1000).toFixed(2)} GHz`, 'Boost clock'],
+    cores,
+    g.tdp && [`${g.tdp} W`, 'Board power'],
+    g.releaseDate && [new Date(`${g.releaseDate}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }), 'Released'],
+  ].filter(Boolean);
+  return `<div class="glance">${tiles.map(([v, k]) => `<div><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}</div>`;
+}
+
+function techChips(g) {
+  const items = FEATURES.filter((f) => g.tech?.[f.id]);
+  if (!items.length) return '';
+  return `<h4>Technologies</h4><div class="tech-chips">${items
+    .map((f) => `<span class="tech-chip" title="${esc(`${f.label}: ${f.hint}`)}">${esc(g.tech[f.id])}</span>`)
+    .join('')}</div>`;
+}
+
+function fullSpecs(g) {
+  const groups = SPEC_GROUPS.map(([title, fields]) => {
+    const rows = fields.filter(([k]) => has(g[k])).map(([k, label, f]) => `<div><dt>${label}</dt><dd>${esc(f ? f(g[k], g) : g[k])}</dd></div>`);
+    return rows.length ? `<div class="spec-group"><h5>${title}</h5><dl>${rows.join('')}</dl></div>` : '';
+  }).join('');
+  return `<details class="disclosure"><summary>Full specifications</summary><div class="spec-groups">${groups}</div></details>`;
+}
+
 function benchTable(g) {
-  if (!g.perf) return '<p class="na">Tom\'s Hardware hasn\'t benchmarked this card in its current hierarchy, so it has no value score.</p>';
+  if (!g.perf) return '<p class="note">Not in Tom\'s Hardware\'s benchmark hierarchy, so this card has no performance or value score.</p>';
   const cell = (kind, res) => {
     const c = g.perf[kind]?.[res];
     const sel = res === state.res && (state.work === kind || state.work === 'mixed') ? ' class="sel"' : '';
-    return `<td${sel}>${c ? `${c.fps.toFixed(1)} <span class="na">(${c.pct.toFixed(1)}%)</span>` : '—'}</td>`;
+    return `<td${sel}${c ? ` title="${c.pct.toFixed(1)}% of the fastest card"` : ''}>${c ? c.fps.toFixed(0) : '—'}</td>`;
   };
-  return `<table class="bench"><thead><tr><th>Avg FPS (% of fastest)</th><th>1080p</th><th>1440p</th><th>4K</th></tr></thead><tbody>
+  return `<table class="bench"><thead><tr><th></th><th>1080p</th><th>1440p</th><th>4K</th></tr></thead><tbody>
 <tr><td>Raster</td>${cell('raster', '1080p')}${cell('raster', '1440p')}${cell('raster', '4k')}</tr>
-<tr><td>Ray tracing</td>${cell('rt', '1080p')}${cell('rt', '1440p')}${cell('rt', '4k')}</tr></tbody></table>`;
+<tr><td>Ray tracing</td>${cell('rt', '1080p')}${cell('rt', '1440p')}${cell('rt', '4k')}</tr></tbody></table>
+<p class="note">Average FPS at ultra settings across Tom's Hardware's game suite. Hover over a number for its percentage of the fastest card.</p>`;
 }
 
-function priceBox(g) {
+function priceTiles(g) {
+  const c = PRICES.cards?.[g.id] ?? {};
+  const tile = (label, p) => {
+    if (!p) return `<div class="price-tile"><span>${label}</span><b class="na">—</b><small>No reliable price right now</small></div>`;
+    const count = p.listings != null ? ` · ${p.listings} listing${p.listings === 1 ? '' : 's'}` : '';
+    return `<div class="price-tile"><span>${label}</span><b>${money(p.price)}</b><small title="${esc(SOURCE_HINT[p.source] ?? '')}">${esc(SOURCE_SHORT[p.source] ?? p.source)}${count} · ${esc(ago(p.fetched))}</small></div>`;
+  };
+  const msrp = g.msrp ? `<div class="price-tile"><span>Launch MSRP</span><b>${money(g.msrp)}</b><small>At release</small></div>` : '';
+  return `<div class="price-tiles">${tile('New', c.new)}${tile('Used', c.used)}${msrp}</div>`;
+}
+
+function priceSources(g) {
   const c = PRICES.cards?.[g.id] ?? {};
   const q = c.quotes ?? {};
-  const box = (label, p) => {
-    if (!p) return `<div><div class="k">${label}</div><div class="v na">—</div><div class="s">No reliable price right now</div></div>`;
-    const ex = (p.examples ?? []).map((e) => `<li><a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.title)}</a><span>${money(e.price)}</span></li>`).join('');
-    const detail = p.source === 'retail'
-      ? `Best US retail price${p.lowestEver ? ` · lowest ever ${money(p.lowestEver)}` : ''}`
-      : `Lowest ${money(p.low)} · ${p.listings} listing${p.listings === 1 ? '' : 's'}`;
-    return `<div><div class="k">${label} · ${esc(SOURCE_SHORT[p.source] ?? p.source)}</div><div class="v">${money(p.price)}</div>
-<div class="s">${detail} · ${esc(ago(p.fetched))}${p.carriedForward ? ' (last successful check)' : ''}</div>
-${ex ? `<ul>${ex}</ul>` : ''}</div>`;
-  };
   const quote = (x) => {
     if (!x) return '<span class="na">—</span>';
     if (x.price == null) return x.outOfStock ? '<span class="na">Out of stock</span>' : '<span class="na">—</span>';
-    const n = x.listings != null ? ` <span class="na">(${x.listings})</span>` : '';
-    return `${money(x.price)}${n}`;
+    return `${money(x.price)}${x.listings != null ? ` <span class="na">(${x.listings})</span>` : ''}`;
   };
   const when = (...xs) => {
     const f = xs.find((x) => x?.fetched)?.fetched;
     return f ? esc(fmtDate(f)) : '<span class="na">—</span>';
   };
   const ebayOff = PRICES.sources?.ebay?.status === 'unconfigured';
-  return `<div class="pricebox">${box('New', c.new)}${box('Used', c.used)}</div>
-<table class="bench quotes"><thead><tr><th>All price sources</th><th>New</th><th>Used</th><th>Data from</th></tr></thead><tbody>
-<tr><td title="${esc(SOURCE_HINT.retail)}">Retail (Tom's Hardware tracker)</td><td>${quote(q.retail)}</td><td><span class="na">n/a</span></td><td>${when(q.retail)}</td></tr>
-<tr><td title="${esc(SOURCE_HINT.ebay)}">eBay live API</td>${ebayOff ? '<td colspan="3"><span class="na">Not connected yet</span></td>' : `<td>${quote(q.ebayNew)}</td><td>${quote(q.ebayUsed)}</td><td>${when(q.ebayNew, q.ebayUsed)}</td>`}</tr>
-<tr><td title="${esc(SOURCE_HINT.hardwaredeals)}">eBay daily snapshot</td><td>${quote(q.hdNew)}</td><td>${quote(q.hdUsed)}</td><td>${when(q.hdNew, q.hdUsed)}</td></tr>
-<tr><td>Launch MSRP</td><td>${g.msrp ? money(g.msrp) : '<span class="na">—</span>'}</td><td></td><td></td></tr>
+  const listings = [...(c.new?.examples ?? []).map((e) => ['New', e]), ...(c.used?.examples ?? []).map((e) => ['Used', e])];
+  return `<details class="disclosure"><summary>Price sources &amp; listings</summary>
+<table class="bench quotes"><thead><tr><th>Source</th><th>New</th><th>Used</th><th>Data from</th></tr></thead><tbody>
+<tr><td title="${esc(SOURCE_HINT.retail)}">Retail tracker</td><td>${quote(q.retail)}</td><td><span class="na">—</span></td><td>${when(q.retail)}</td></tr>
+<tr><td title="${esc(SOURCE_HINT.ebay)}">eBay live</td>${ebayOff ? '<td colspan="3"><span class="na">Not connected yet</span></td>' : `<td>${quote(q.ebayNew)}</td><td>${quote(q.ebayUsed)}</td><td>${when(q.ebayNew, q.ebayUsed)}</td>`}</tr>
+<tr><td title="${esc(SOURCE_HINT.hardwaredeals)}">eBay snapshot</td><td>${quote(q.hdNew)}</td><td>${quote(q.hdUsed)}</td><td>${when(q.hdNew, q.hdUsed)}</td></tr>
 </tbody></table>
-<p class="na" style="margin:6px 0 0">Listing counts in parentheses. eBay quotes need 3+ exact-model matches to be used.</p>`;
-}
-
-function techList(g) {
-  const items = FEATURES.filter((f) => g.tech?.[f.id]);
-  if (!items.length) return '';
-  return `<h4>Technologies</h4><ul class="techs">${items
-    .map((f) => `<li title="${esc(f.hint)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>${esc(f.label)}</b>${esc(g.tech[f.id])}</span></li>`)
-    .join('')}</ul>`;
+<p class="note">Listing counts in parentheses. eBay prices need 3+ exact-model matches to be used.${q.retail?.lowestEver ? ` Lowest retail price ever: ${money(q.retail.lowestEver)}.` : ''}</p>
+${listings.length ? `<h5>Cheapest matching listings</h5><ul class="listings">${listings.map(([kind, e]) => `<li><span class="tag">${kind}</span><a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.title)}</a><b>${money(e.price)}</b></li>`).join('')}</ul>` : ''}
+</details>`;
 }
 
 function detailHtml(r) {
   const { g } = r;
-  const specs = SPEC_FIELDS.filter(([k]) => g[k] != null && g[k] !== '')
-    .map(([k, label, f]) => `<div><dt>${label}</dt><dd>${esc(f ? f(g[k], g) : g[k])}</dd></div>`)
-    .join('');
   const ebayQ = encodeURIComponent(g.benchmarkName ?? g.name);
-  return `<div class="detail" role="row"><div role="cell">
-<h4>Specifications</h4><dl class="specs">${specs}</dl>
-${techList(g)}
-<div class="links">${g.url ? `<a href="${esc(g.url)}" target="_blank" rel="noopener">TechPowerUp spec page ↗</a>` : ''}
-<a href="https://www.ebay.com/sch/27386/i.html?_nkw=${ebayQ}&LH_BIN=1" target="_blank" rel="noopener">Search eBay ↗</a></div>
-</div><div role="cell">
-<h4>Game benchmarks</h4>${benchTable(g)}
-${g.perf ? `<h4>Prices</h4>${priceBox(g)}` : ''}
+  return `<div class="detail" role="row"><div class="d-col" role="cell">
+<section>${glance(g)}</section>
+${techChips(g) ? `<section>${techChips(g)}</section>` : ''}
+${fullSpecs(g)}
+<div class="links">${g.url ? `<a href="${esc(g.url)}" target="_blank" rel="noopener">TechPowerUp specs ↗</a>` : ''}<a href="https://www.ebay.com/sch/27386/i.html?_nkw=${ebayQ}&LH_BIN=1" target="_blank" rel="noopener">Search eBay ↗</a></div>
+</div><div class="d-col" role="cell">
+<section><h4>Game benchmarks</h4>${benchTable(g)}</section>
+${g.perf ? `<section><h4>Prices</h4>${priceTiles(g)}</section>${priceSources(g)}` : ''}
 </div></div>`;
 }
 
