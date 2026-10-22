@@ -37,6 +37,8 @@ jobs:
           node scripts/fetch-prices.mjs
       - name: Test
         run: npm test
+      - name: Version asset URLs (cache busting)
+        run: node scripts/stamp-version.mjs
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
