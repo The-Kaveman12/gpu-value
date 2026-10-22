@@ -243,22 +243,38 @@ button, input, select { font: inherit; color: inherit; }
 
 /* Header bar, theme toggle, dismissible banner ------------------------------ */
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.theme-toggle {
-  display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 12px 0 10px;
-  border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text);
-  box-shadow: var(--shadow); cursor: pointer; font-size: 13px; font-weight: 500;
+/* Theme switch: same language as the page's other toggles, icon on the knob. */
+.theme-switch {
+  position: relative; flex: none; width: 52px; height: 30px; padding: 0; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface-2);
+  box-shadow: inset 0 1px 2px rgb(16 24 40 / 0.08);
+  transition: background-color .2s, border-color .2s;
 }
-.theme-toggle:hover { border-color: var(--faint); }
-.theme-toggle:focus-visible, .banner-close:focus-visible { outline: 2px solid var(--perf); outline-offset: 2px; }
-.theme-toggle svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-/* Show the icon of the theme you'd switch TO. */
-.theme-toggle .i-sun { display: none; }
-:root[data-theme="dark"] .theme-toggle .i-sun { display: block; }
-:root[data-theme="dark"] .theme-toggle .i-moon { display: none; }
+.theme-switch:hover { border-color: var(--faint); }
+.theme-switch .thumb {
+  position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%;
+  display: grid; place-items: center; background: var(--surface);
+  box-shadow: 0 1px 3px rgb(16 24 40 / 0.25);
+  transition: transform .22s cubic-bezier(.3, .7, .4, 1), background-color .2s;
+}
+.theme-switch svg {
+  grid-area: 1 / 1; width: 14px; height: 14px; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+  transition: opacity .2s, transform .22s;
+}
+.theme-switch .i-sun { stroke: #d97706; }
+.theme-switch .i-moon { stroke: var(--perf); fill: var(--perf); opacity: 0; transform: rotate(-30deg); }
+/* "On" state follows the active theme in CSS, so it's correct before JS runs. */
+:root[data-theme="dark"] .theme-switch { background: var(--perf-soft); border-color: color-mix(in srgb, var(--perf) 45%, var(--border)); }
+:root[data-theme="dark"] .theme-switch .thumb { transform: translateX(22px); background: color-mix(in srgb, var(--perf) 28%, var(--surface)); box-shadow: 0 1px 3px rgb(0 0 0 / 0.5); }
+:root[data-theme="dark"] .theme-switch .i-sun { opacity: 0; transform: rotate(30deg); }
+:root[data-theme="dark"] .theme-switch .i-moon { opacity: 1; transform: none; }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .theme-toggle .i-sun { display: block; }
-  :root:not([data-theme="light"]) .theme-toggle .i-moon { display: none; }
+  :root:not([data-theme="light"]) .theme-switch { background: var(--perf-soft); border-color: color-mix(in srgb, var(--perf) 45%, var(--border)); }
+  :root:not([data-theme="light"]) .theme-switch .thumb { transform: translateX(22px); background: color-mix(in srgb, var(--perf) 28%, var(--surface)); box-shadow: 0 1px 3px rgb(0 0 0 / 0.5); }
+  :root:not([data-theme="light"]) .theme-switch .i-sun { opacity: 0; transform: rotate(30deg); }
+  :root:not([data-theme="light"]) .theme-switch .i-moon { opacity: 1; transform: none; }
 }
+.theme-switch:focus-visible, .banner-close:focus-visible { outline: 2px solid var(--perf); outline-offset: 2px; }
 .banner:not([hidden]) { display: flex; align-items: flex-start; gap: 12px; }
 .banner #bannerText { flex: 1; }
 .banner-close {

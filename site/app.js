@@ -236,11 +236,7 @@ const prefersDark = () => globalThis.matchMedia?.('(prefers-color-scheme: dark)'
 const currentTheme = () => document.documentElement?.dataset.theme ?? (prefersDark() ? 'dark' : 'light');
 
 function syncThemeToggle() {
-  const next = currentTheme() === 'dark' ? 'light' : 'dark';
-  const btn = $('#themeToggle');
-  btn.setAttribute('aria-label', `Switch to ${next} mode`);
-  btn.title = `Switch to ${next} mode`;
-  $('.theme-label').textContent = next === 'dark' ? 'Dark' : 'Light';
+  $('#themeToggle').setAttribute('aria-checked', String(currentTheme() === 'dark'));
 }
 
 function bindChrome() {

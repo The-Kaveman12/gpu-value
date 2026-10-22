@@ -79,7 +79,7 @@ test('page renders live multi-source prices and an opened detail panel', async (
   const el = (sel) => ({
     innerHTML: '', textContent: '', value: '', checked: false, hidden: false, href: '', dataset: {},
     addEventListener(type, fn) { listeners.set(`${sel}:${type}`, fn); },
-    setAttribute() {}, classList: { toggle() {}, add() {}, remove() {} }, querySelectorAll: () => [],
+    attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, classList: { toggle() {}, add() {}, remove() {} }, querySelectorAll: () => [],
   });
   globalThis.document = {
     querySelector: (sel) => (sel.startsWith('meta') || sel.startsWith('.row.item[') ? null : elements.get(sel) ?? elements.set(sel, el(sel)).get(sel)),
@@ -113,9 +113,10 @@ test('page renders live multi-source prices and an opened detail panel', async (
   listeners.get('#themeToggle:click')();
   assert.equal(document.documentElement.dataset.theme, 'dark');
   assert.equal(saved.get('theme'), 'dark');
-  assert.equal(elements.get('.theme-label').textContent, 'Light');
+  assert.equal(elements.get('#themeToggle').attrs['aria-checked'], 'true');
   listeners.get('#themeToggle:click')();
   assert.equal(document.documentElement.dataset.theme, 'light');
+  assert.equal(elements.get('#themeToggle').attrs['aria-checked'], 'false');
 
   // The info banner can be dismissed, and that's remembered.
   const banner = elements.get('#banner');
