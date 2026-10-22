@@ -4,7 +4,10 @@ A searchable catalog of every desktop graphics card with full specs, ranked by *
 
 - **Specs** for ~1,275 desktop and workstation GPUs come from the [TechPowerUp GPU Database](https://www.techpowerup.com/gpu-specs/), via the open [RightNow GPU Database](https://github.com/RightNow-AI/RightNow-GPU-Database) (Apache-2.0).
 - **Performance** comes from real game benchmarks in [Tom's Hardware's GPU Benchmarks Hierarchy](https://www.tomshardware.com/reviews/gpu-hierarchy,4388.html): average fps at 1080p, 1440p and 4K, raster and ray tracing.
-- **Prices** come from the [eBay Browse API](https://developer.ebay.com/api-docs/buy/browse/overview.html), refreshed every 6 hours by GitHub Actions. Each price is the median of the 5 cheapest exact-model Buy It Now listings from well-rated US sellers, shipping included.
+- **Prices** are refreshed every 6 hours by GitHub Actions from three sources:
+  - **New:** the best current US retail price from [Tom's Hardware's GPU price tracker](https://www.tomshardware.com/pc-components/gpus/lowest-gpu-prices-tracking), or live eBay listings if they're cheaper.
+  - **Used:** the [eBay Browse API](https://developer.ebay.com/api-docs/buy/browse/overview.html), falling back to [HardwareDeals.co's daily eBay snapshot](https://github.com/HardwareDealsCo/gpu-deals) (MIT) until the API key is set.
+  - Each eBay price is the median of the 5 cheapest exact-model listings, and at least 3 matches are required. Every quote keeps its source and date, and stale quotes are flagged on the page.
 
 **Value = average FPS ÷ price × 100** (frames per second per $100). You can switch resolution, raster/ray tracing/mixed, and new/used/MSRP pricing in the page.
 
@@ -18,7 +21,7 @@ Prices need a free eBay developer key:
    - `EBAY_CLIENT_SECRET`: the Cert ID (Client Secret)
 3. Go to **Actions → Refresh prices and deploy → Run workflow**.
 
-Until the keys are added, the site ranks by launch MSRP and shows a banner saying so.
+Until the keys are added, new prices come from the retail tracker and used prices from the daily eBay snapshot.
 
 ## Development
 

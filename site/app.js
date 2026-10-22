@@ -3,7 +3,8 @@
 import { derive as deriveRows, SORT_DIR, searchText, vendorKey } from './logic.js';
 
 const PAGE = 50;
-const STALE_PRICE_HOURS = 48;
+const DEFAULT_STALE_HOURS = 48;
+const MIN_LISTINGS = 3;
 const DEFAULTS = { q: '', res: '1440p', work: 'raster', basis: 'new', vendors: [], minVram: 0, maxPrice: null, segment: 'desktop', sort: 'value', dir: null, rankedOnly: false };
 const RES_LABEL = { '1080p': '1080p', '1440p': '1440p', '4k': '4K' };
 const WORK_LABEL = { raster: 'raster', rt: 'ray tracing', mixed: 'mixed' };
@@ -20,9 +21,17 @@ function ago(iso) {
   return `${Math.round(h / 24)} days ago`;
 }
 const hoursOld = (iso) => (Date.now() - new Date(iso)) / 36e5;
+const staleAfter = (source) => PRICES.sources?.[source]?.staleAfterHours ?? DEFAULT_STALE_HOURS;
+const isStale = (q) => q?.fetched && hoursOld(q.fetched) > staleAfter(q.source);
+const SOURCE_SHORT = { retail: 'retail', ebay: 'eBay', hardwaredeals: 'eBay snapshot' };
+const SOURCE_HINT = {
+  retail: "Best current US retail price from Tom's Hardware's GPU price tracker",
+  ebay: 'Median of the 5 cheapest matching eBay Buy It Now listings (live API)',
+  hardwaredeals: "Median of the cheapest matching listings in HardwareDeals.co's daily eBay snapshot (no seller ratings or shipping)",
+};
 
 let DATA = { gpus: [], sources: {} };
-let PRICES = { cards: {}, status: 'unavailable' };
+let PRICES = { cards: {}, sources: {} };
 let state = { ...DEFAULTS };
 let limit = PAGE;
 const open = new Set();
@@ -62,15 +71,16 @@ function tags(g, price) {
   if (g.directX === '12.2') t.push('<span class="tag" title="Supports DirectX 12 Ultimate (hardware ray tracing, mesh shaders)">DX12U</span>');
   if (g.segment === 'workstation') t.push('<span class="tag">Pro</span>');
   if (/\bOEM\b/.test(g.name)) t.push('<span class="tag">OEM</span>');
-  if (price && price.kind !== 'msrp' && price.fetched && hoursOld(price.fetched) > STALE_PRICE_HOURS) t.push(`<span class="tag warn" title="Price last refreshed ${esc(ago(price.fetched))}">Stale price</span>`);
-  if (price && price.kind !== 'msrp' && price.listings < 3) t.push('<span class="tag warn" title="Fewer than 3 matching listings">Few listings</span>');
+  if (price && price.kind !== 'msrp' && isStale(price)) t.push(`<span class="tag warn" title="Price data is from ${esc(ago(price.fetched))}">Stale price</span>`);
+  if (price && price.kind !== 'msrp' && price.listings != null && price.listings < MIN_LISTINGS) t.push('<span class="tag warn" title="Fewer than 3 matching listings">Few listings</span>');
   return t.join('');
 }
 
 function priceCell(price) {
   if (!price) return `<span class="na">${state.basis === 'msrp' ? 'No MSRP' : 'No live price'}</span>`;
   if (price.kind === 'msrp') return `<div class="p">${money(price.price)}</div><div class="s">launch MSRP</div>`;
-  return `<div class="p">${money(price.price)}</div><div class="s">${price.listings} listing${price.listings === 1 ? '' : 's'} · ${esc(ago(price.fetched))}</div>`;
+  const count = price.listings != null ? ` · ${price.listings} listing${price.listings === 1 ? '' : 's'}` : '';
+  return `<div class="p">${money(price.price)}</div><div class="s" title="${esc(SOURCE_HINT[price.source] ?? '')}">${esc(SOURCE_SHORT[price.source] ?? price.source)}${count} · ${esc(ago(price.fetched))}</div>`;
 }
 
 function rowHtml(r, maxFps, maxValue) {
@@ -120,16 +130,37 @@ function benchTable(g) {
 }
 
 function priceBox(g) {
+  const c = PRICES.cards?.[g.id] ?? {};
+  const q = c.quotes ?? {};
   const box = (label, p) => {
-    if (!p) return `<div><div class="k">${label}</div><div class="v na">—</div><div class="s">No matching listings</div></div>`;
+    if (!p) return `<div><div class="k">${label}</div><div class="v na">—</div><div class="s">No reliable price right now</div></div>`;
     const ex = (p.examples ?? []).map((e) => `<li><a href="${esc(e.url)}" target="_blank" rel="noopener">${esc(e.title)}</a><span>${money(e.price)}</span></li>`).join('');
-    return `<div><div class="k">${label}</div><div class="v">${money(p.price)}</div>
-<div class="s">Lowest ${money(p.low)} · ${p.listings} listing${p.listings === 1 ? '' : 's'} · ${esc(ago(p.fetched))}${p.carriedForward ? ' (last successful check)' : ''}</div>
+    const detail = p.source === 'retail'
+      ? `Best US retail price${p.lowestEver ? ` · lowest ever ${money(p.lowestEver)}` : ''}`
+      : `Lowest ${money(p.low)} · ${p.listings} listing${p.listings === 1 ? '' : 's'}`;
+    return `<div><div class="k">${label} · ${esc(SOURCE_SHORT[p.source] ?? p.source)}</div><div class="v">${money(p.price)}</div>
+<div class="s">${detail} · ${esc(ago(p.fetched))}${p.carriedForward ? ' (last successful check)' : ''}</div>
 ${ex ? `<ul>${ex}</ul>` : ''}</div>`;
   };
-  const c = PRICES.cards?.[g.id] ?? {};
-  return `<div class="pricebox">${box('eBay new', c.new)}${box('eBay used', c.used)}</div>
-<div class="s" style="margin-top:8px;color:var(--muted);font-size:12px">Launch MSRP: ${g.msrp ? money(g.msrp) : 'n/a'}</div>`;
+  const quote = (x) => {
+    if (!x) return '<span class="na">—</span>';
+    if (x.price == null) return x.outOfStock ? '<span class="na">Out of stock</span>' : '<span class="na">—</span>';
+    const n = x.listings != null ? ` <span class="na">(${x.listings})</span>` : '';
+    return `${money(x.price)}${n}`;
+  };
+  const when = (...xs) => {
+    const f = xs.find((x) => x?.fetched)?.fetched;
+    return f ? esc(fmtDate(f)) : '<span class="na">—</span>';
+  };
+  const ebayOff = PRICES.sources?.ebay?.status === 'unconfigured';
+  return `<div class="pricebox">${box('New', c.new)}${box('Used', c.used)}</div>
+<table class="bench quotes"><thead><tr><th>All price sources</th><th>New</th><th>Used</th><th>Data from</th></tr></thead><tbody>
+<tr><td title="${esc(SOURCE_HINT.retail)}">Retail (Tom's Hardware tracker)</td><td>${quote(q.retail)}</td><td><span class="na">n/a</span></td><td>${when(q.retail)}</td></tr>
+<tr><td title="${esc(SOURCE_HINT.ebay)}">eBay live API</td>${ebayOff ? '<td colspan="3"><span class="na">Not connected yet</span></td>' : `<td>${quote(q.ebayNew)}</td><td>${quote(q.ebayUsed)}</td><td>${when(q.ebayNew, q.ebayUsed)}</td>`}</tr>
+<tr><td title="${esc(SOURCE_HINT.hardwaredeals)}">eBay daily snapshot</td><td>${quote(q.hdNew)}</td><td>${quote(q.hdUsed)}</td><td>${when(q.hdNew, q.hdUsed)}</td></tr>
+<tr><td>Launch MSRP</td><td>${g.msrp ? money(g.msrp) : '<span class="na">—</span>'}</td><td></td><td></td></tr>
+</tbody></table>
+<p class="na" style="margin:6px 0 0">Listing counts in parentheses. eBay quotes need 3+ exact-model matches to be used.</p>`;
 }
 
 function detailHtml(r) {
@@ -162,9 +193,14 @@ function renderPicks(ranked) {
 
 function renderSources() {
   const s = DATA.sources;
-  const live = PRICES.status === 'live' || PRICES.status === 'partial';
-  const pricePill = PRICES.updated
-    ? `<span class="pill"><i class="live${live && hoursOld(PRICES.updated) < STALE_PRICE_HOURS ? '' : ' off'}"></i>Prices <b>${esc(ago(PRICES.updated))}</b> · eBay</span>`
+  const src = PRICES.sources ?? {};
+  const parts = [];
+  if (src.retail?.updated) parts.push(`retail <b>${esc(fmtDate(src.retail.updated))}</b>`);
+  if (src.ebay?.status === 'live' || src.ebay?.status === 'partial') parts.push(`eBay <b>${esc(ago(src.ebay.updated))}</b>`);
+  if (src.hardwaredeals?.updated) parts.push(`eBay snapshot <b>${esc(fmtDate(src.hardwaredeals.updated))}</b>`);
+  const anyFresh = Object.entries(src).some(([k, v]) => v.updated && hoursOld(v.updated) <= (v.staleAfterHours ?? DEFAULT_STALE_HOURS));
+  const pricePill = parts.length
+    ? `<span class="pill"><i class="live${anyFresh ? '' : ' off'}"></i>Prices · ${parts.join(' · ')}</span>`
     : '<span class="pill"><i class="live off"></i>Live prices <b>not connected</b></span>';
   $('#sources').innerHTML = `${pricePill}
 <span class="pill">Benchmarks <b>${esc(fmtDate(s.benchmarks?.updated))}</b> · Tom's Hardware</span>
@@ -172,12 +208,15 @@ function renderSources() {
   $('#built').textContent = `Site built ${new Date(DATA.built).toLocaleString()}`;
 
   const banner = $('#banner');
-  if (!PRICES.updated) {
-    banner.hidden = false;
-    banner.textContent = 'Live eBay prices haven’t been fetched yet, so value is calculated from launch MSRP for now.';
-  } else if (hoursOld(PRICES.updated) > STALE_PRICE_HOURS) {
-    banner.hidden = false;
+  banner.hidden = false;
+  banner.classList.remove('info');
+  if (!parts.length) {
+    banner.textContent = 'Prices haven’t been fetched yet, so value is calculated from launch MSRP for now.';
+  } else if (!anyFresh) {
     banner.textContent = `Prices were last refreshed ${ago(PRICES.updated)}. The scheduled update may be failing.`;
+  } else if (src.ebay?.status === 'unconfigured') {
+    banner.classList.add('info');
+    banner.textContent = 'New prices come from Tom’s Hardware’s US retail price tracker and used prices from a daily snapshot of eBay listings. Live eBay data will be added once its API is connected. Hover over a price to see its source.';
   } else banner.hidden = true;
 }
 

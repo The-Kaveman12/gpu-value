@@ -235,3 +235,8 @@ button, input, select { font: inherit; color: inherit; }
   .controls { position: static; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* Price sources ----------------------------------------------------------- */
+.banner.info { background: var(--perf-soft); border-color: color-mix(in srgb, var(--perf) 30%, transparent); }
+.bench.quotes { margin-top: 12px; }
+.bench.quotes td:first-child { cursor: help; }

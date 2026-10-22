@@ -51,7 +51,7 @@ test('page script renders against a stub DOM without errors', async () => {
   const elements = new Map();
   const el = () => ({
     innerHTML: '', textContent: '', value: '', checked: false, hidden: false, href: '', dataset: {},
-    addEventListener() {}, setAttribute() {}, classList: { toggle() {} }, querySelectorAll: () => [],
+    addEventListener() {}, setAttribute() {}, classList: { toggle() {}, add() {}, remove() {} }, querySelectorAll: () => [],
   });
   globalThis.document = {
     querySelector: (sel) => (sel.startsWith('meta') ? null : elements.get(sel) ?? elements.set(sel, el()).get(sel)),
@@ -71,4 +71,37 @@ test('page script renders against a stub DOM without errors', async () => {
   assert.match(elements.get('#picks').innerHTML, /Best value/);
   assert.match(elements.get('#summary').textContent, /48 with a value score at 4K mixed using MSRP prices/);
   assert.equal(elements.get('#banner').hidden, false);
+});
+
+test('page renders live multi-source prices and an opened detail panel', async () => {
+  const elements = new Map();
+  const listeners = new Map();
+  const el = (sel) => ({
+    innerHTML: '', textContent: '', value: '', checked: false, hidden: false, href: '', dataset: {},
+    addEventListener(type, fn) { listeners.set(`${sel}:${type}`, fn); },
+    setAttribute() {}, classList: { toggle() {}, add() {}, remove() {} }, querySelectorAll: () => [],
+  });
+  globalThis.document = {
+    querySelector: (sel) => (sel.startsWith('meta') || sel.startsWith('.row.item[') ? null : elements.get(sel) ?? elements.set(sel, el(sel)).get(sel)),
+    querySelectorAll: () => [],
+  };
+  globalThis.CSS = { escape: (s) => s };
+  globalThis.location = { search: '', pathname: '/' };
+  globalThis.history = { replaceState() {} };
+  globalThis.fetch = async (url) => ({
+    ok: true,
+    json: async () => JSON.parse(await readFile(new URL(`../site/${url}`, import.meta.url), 'utf8')),
+  });
+  await import('../site/app.js?with-prices');
+  await new Promise((r) => setTimeout(r, 50));
+
+  assert.match(elements.get('#summary').textContent, /using new prices/);
+  assert.match(elements.get('#sources').innerHTML, /retail/);
+  const picks = elements.get('#picks').innerHTML;
+  const id = /data-id="([^"]+)"/.exec(picks)[1];
+  listeners.get('#picks:click')({ target: { closest: () => ({ dataset: { id } }) } });
+  const rows = elements.get('#rows').innerHTML;
+  assert.match(rows, /All price sources/);
+  assert.match(rows, /Retail \(Tom's Hardware tracker\)/);
+  assert.doesNotMatch(rows, /undefined|NaN/);
 });

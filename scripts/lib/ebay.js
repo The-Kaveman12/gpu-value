@@ -119,15 +119,16 @@ function totalPrice(item) {
  * cheapest few matching listings from established sellers, which resists
  * one-off scams and mislabeled items better than the single minimum.
  */
-export function summarizeListings(items, model) {
+export function summarizeListings(items, model, { requireSeller = true, minPrice = 0 } = {}) {
   const matched = items
     .filter((it) => titleMatches(it.title ?? '', model))
     .filter((it) => {
+      if (!requireSeller) return true;
       const s = it.seller ?? {};
       return Number(s.feedbackPercentage ?? 0) >= MIN_SELLER_FEEDBACK_PCT && Number(s.feedbackScore ?? 0) >= MIN_SELLER_FEEDBACK_SCORE;
     })
     .map((it) => ({ title: it.title, url: it.itemWebUrl, total: totalPrice(it) }))
-    .filter((it) => Number.isFinite(it.total))
+    .filter((it) => Number.isFinite(it.total) && it.total >= minPrice)
     .sort((a, b) => a.total - b.total);
 
   if (matched.length === 0) return null;

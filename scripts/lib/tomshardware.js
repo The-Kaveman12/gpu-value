@@ -35,6 +35,42 @@ function parseTable(tableHtml) {
   });
 }
 
+const dollars = (s) => {
+  const m = /\$\s*([\d,]+(?:\.\d+)?)/.exec(s ?? '');
+  return m ? Number(m[1].replace(/,/g, '')) : null;
+};
+
+/**
+ * Parse Tom's Hardware's "Lowest GPU prices" tracker. Returns
+ * { updated: ISO timestamp | null, rows: [{ card, price, lowestEver, msrp, outOfStock }] }.
+ * `price` is the best current US retail price for a new card, or null when out of stock.
+ */
+export function parsePriceTracker(html) {
+  const rows = [];
+  for (const m of html.matchAll(/<table[\s\S]*?<\/table>/g)) {
+    const cells = [...m[0].matchAll(/<tr[\s\S]*?<\/tr>/g)].map((r) =>
+      [...r[0].matchAll(/<t[hd][^>]*>([\s\S]*?)<\/t[hd]>/g)].map((c) => text(c[1])),
+    );
+    const header = (cells[0] ?? []).map((h) => h.toLowerCase());
+    const col = (re) => header.findIndex((h) => re.test(h));
+    const [name, best, lowest, msrp] = [col(/gpu|model|card/), col(/best .*price/), col(/lowest/), col(/msrp/)];
+    if (name < 0 || best < 0) continue;
+    for (const r of cells.slice(1)) {
+      if (!r[name]) continue;
+      rows.push({
+        card: r[name],
+        price: dollars(r[best]),
+        lowestEver: lowest >= 0 ? dollars(r[lowest]) : null,
+        msrp: msrp >= 0 ? dollars(r[msrp]) : null,
+        outOfStock: /out of stock/i.test(r[best]),
+      });
+    }
+  }
+  if (rows.length === 0) throw new Error('No price tables found on the Tom\'s Hardware tracker page.');
+  const updated = /"dateModified":\s*"([^"]+)"/.exec(html)?.[1] ?? null;
+  return { updated, rows };
+}
+
 /** Returns { updated: 'YYYY-MM-DD' | null, tables: { raster: [...], rt: [...] } }. */
 export function parseHierarchy(html) {
   const tables = {};
