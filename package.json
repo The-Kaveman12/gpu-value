@@ -1,0 +1,19 @@
+{
+  "name": "gpu-value-checker",
+  "version": "1.0.0",
+  "description": "Every desktop GPU with specs, ranked by real gaming performance per dollar using live eBay prices.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "prices": "node scripts/fetch-prices.mjs",
+    "update:specs": "node scripts/update-specs.mjs",
+    "update:benchmarks": "node scripts/update-benchmarks.mjs",
+    "serve": "node scripts/serve.mjs",
+    "pretest": "node scripts/build.mjs",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

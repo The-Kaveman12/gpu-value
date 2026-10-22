@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPU Value</title>
+<meta name="description" content="Every desktop graphics card with full specs, ranked by real gaming performance per dollar using live prices.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2310b981'/%3E%3Cpath d='M8 21l5-6 4 4 7-9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"><svg viewBox="0 0 32 32"><path d="M8 21l5-6 4 4 7-9" /></svg></span>
+      <span class="brand-name">GPU Value</span>
+    </div>
+    <h1>Every desktop graphics card, ranked by what you actually get per dollar.</h1>
+    <p class="lede">Real game benchmarks divided by live market prices. Search the full catalog of specs, or sort by value to find the best buy at your resolution.</p>
+    <div class="sources" id="sources" aria-live="polite"></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="banner" class="banner" hidden></div>
+
+  <section class="picks" id="picks" aria-label="Best value picks"></section>
+
+  <section class="controls" aria-label="Filters">
+    <div class="search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Search 1,000+ GPUs — e.g. “9070”, “16GB”, “Blackwell”" autocomplete="off" aria-label="Search GPUs">
+    </div>
+    <div class="control-row">
+      <div class="seg" role="group" aria-label="Resolution" data-key="res">
+        <button data-v="1080p">1080p</button><button data-v="1440p">1440p</button><button data-v="4k">4K</button>
+      </div>
+      <div class="seg" role="group" aria-label="Workload" data-key="work">
+        <button data-v="raster">Raster</button><button data-v="rt">Ray tracing</button><button data-v="mixed" title="70% raster, 30% ray tracing">Mixed</button>
+      </div>
+      <div class="seg" role="group" aria-label="Price basis" data-key="basis">
+        <button data-v="new" title="Live eBay price, new condition">New</button><button data-v="used" title="Live eBay price, used condition">Used</button><button data-v="msrp" title="Launch MSRP">MSRP</button>
+      </div>
+    </div>
+    <div class="control-row filters">
+      <div class="chips" role="group" aria-label="Vendor" id="vendors">
+        <button data-v="NVIDIA"><i class="dot nvidia"></i>NVIDIA</button>
+        <button data-v="AMD"><i class="dot amd"></i>AMD</button>
+        <button data-v="Intel"><i class="dot intel"></i>Intel</button>
+        <button data-v="Other"><i class="dot other"></i>Other</button>
+      </div>
+      <label class="field">Min VRAM
+        <select id="minVram"><option value="0">Any</option><option value="8">8 GB+</option><option value="12">12 GB+</option><option value="16">16 GB+</option><option value="20">20 GB+</option><option value="24">24 GB+</option></select>
+      </label>
+      <label class="field">Max price
+        <span class="money-input"><span>$</span><input id="maxPrice" type="number" min="0" step="50" placeholder="Any" inputmode="numeric"></span>
+      </label>
+      <label class="field">Type
+        <select id="segment"><option value="desktop">Gaming / consumer</option><option value="workstation">Workstation</option><option value="all">All desktop cards</option></select>
+      </label>
+      <label class="field">Sort
+        <select id="sort">
+          <option value="value">Best value</option><option value="perf">Fastest</option><option value="price">Cheapest</option>
+          <option value="vram">Most VRAM</option><option value="release">Newest</option><option value="name">Name</option><option value="tdp">Lowest power</option>
+        </select>
+      </label>
+      <label class="toggle"><input id="rankedOnly" type="checkbox"><span></span>Only cards with a value score</label>
+    </div>
+  </section>
+
+  <div class="summary" id="summary" aria-live="polite"></div>
+
+  <section class="list" role="table" aria-label="GPUs">
+    <div class="row head" role="row">
+      <div role="columnheader" class="c-rank">#</div>
+      <div role="columnheader" class="c-gpu"><button data-sort="name">GPU</button></div>
+      <div role="columnheader" class="c-vram"><button data-sort="vram">VRAM</button></div>
+      <div role="columnheader" class="c-perf"><button data-sort="perf">Avg FPS</button></div>
+      <div role="columnheader" class="c-price"><button data-sort="price">Price</button></div>
+      <div role="columnheader" class="c-value"><button data-sort="value">FPS per $100</button></div>
+      <div role="columnheader" class="c-tdp"><button data-sort="tdp">Power</button></div>
+      <div role="columnheader" class="c-chev"></div>
+    </div>
+    <div id="rows"></div>
+  </section>
+  <div class="more"><button id="more" hidden>Show more</button></div>
+
+  <section class="method" id="method">
+    <h2>How this works</h2>
+    <div class="method-grid">
+      <div>
+        <h3>Value</h3>
+        <p><strong>FPS per $100</strong> = the card's average frame rate across Tom's Hardware's game suite at the chosen resolution and settings, divided by its price, times 100. Higher is better. “Mixed” weights raster 70% and ray tracing 30%.</p>
+      </div>
+      <div>
+        <h3>Prices</h3>
+        <p>Pulled from the eBay Browse API every few hours: US Buy It Now listings from sellers with at least 97% positive feedback. Titles are matched to the exact model (a 5070 never counts as a 5070 Ti), and junk listings like empty boxes and parts-only cards are dropped. The price shown is the median of the 5 cheapest matches, shipping included, so one bait listing can't skew it.</p>
+      </div>
+      <div>
+        <h3>Performance</h3>
+        <p>Real game benchmarks from <a href="https://www.tomshardware.com/reviews/gpu-hierarchy,4388.html" rel="noopener">Tom's Hardware's GPU Benchmarks Hierarchy</a>, all run on one test system. Only cards in that hierarchy get a value score. Every other card is still listed with full specs.</p>
+      </div>
+      <div>
+        <h3>Specs</h3>
+        <p>From the <a href="https://www.techpowerup.com/gpu-specs/" rel="noopener">TechPowerUp GPU Database</a>, via the open <a href="https://github.com/RightNow-AI/RightNow-GPU-Database" rel="noopener">RightNow GPU Database</a> (Apache-2.0). Laptop, integrated, console and data-center parts are excluded.</p>
+      </div>
+    </div>
+    <p class="fine">Not affiliated with any retailer or manufacturer. Prices change constantly, so check the listing before you buy.</p>
+  </section>
+</main>
+
+<footer class="wrap foot">
+  <span id="built"></span>
+  <a href="https://github.com/The-Kaveman12/gpu-value" id="repoLink" rel="noopener">Source on GitHub</a>
+</footer>
+
+<script src="app.js" type="module"></script>
+</body>
+</html>

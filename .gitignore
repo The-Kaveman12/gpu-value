@@ -1,0 +1,4 @@
+node_modules/
+site/data/
+# Personal project notes (owner budget/plans); keep out of the public repo.
+CLAUDE.md
