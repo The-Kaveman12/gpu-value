@@ -5,7 +5,7 @@ import { derive as deriveRows, SORT_DIR, searchText, vendorKey } from './logic.j
 const PAGE = 50;
 const DEFAULT_STALE_HOURS = 48;
 const MIN_LISTINGS = 3;
-const DEFAULTS = { q: '', res: '1440p', work: 'raster', basis: 'new', vendors: [], minVram: 0, maxPrice: null, segment: 'desktop', sort: 'value', dir: null, rankedOnly: false };
+const DEFAULTS = { q: '', res: '1440p', work: 'raster', basis: 'new', vendors: [], minVram: 0, maxPrice: null, minFps: null, segment: 'desktop', sort: 'value', dir: null, rankedOnly: false };
 const RES_LABEL = { '1080p': '1080p', '1440p': '1440p', '4k': '4K' };
 const WORK_LABEL = { raster: 'raster', rt: 'ray tracing', mixed: 'mixed' };
 const BASIS_LABEL = { new: 'new', used: 'used', msrp: 'MSRP' };
@@ -44,6 +44,7 @@ function readUrl() {
   if (p.has('vendors')) s.vendors = p.get('vendors').split(',').filter(Boolean);
   if (p.has('minVram')) s.minVram = Number(p.get('minVram')) || 0;
   if (p.has('maxPrice')) s.maxPrice = Number(p.get('maxPrice')) || null;
+  if (p.has('minFps')) s.minFps = Number(p.get('minFps')) || null;
   s.rankedOnly = p.get('ranked') === '1';
   return s;
 }
@@ -265,10 +266,12 @@ function render() {
 
   $('#rows').innerHTML = shown.length
     ? shown.map((r) => rowHtml(r, maxFps, maxValue)).join('')
-    : '<div class="empty">No GPUs match these filters.</div>';
+    : `<div class="empty">${state.minFps
+      ? `No GPU averages ${state.minFps}+ fps at ${RES_LABEL[state.res]} ${WORK_LABEL[state.work]} with these filters. These are ultra-settings averages across a demanding game suite, so try a lower target, a lower resolution, or turn off other filters.`
+      : 'No GPUs match these filters.'}</div>`;
   $('#more').hidden = rows.length <= limit;
   $('#more').textContent = `Show more (${(rows.length - limit).toLocaleString()} left)`;
-  $('#summary').textContent = `${rows.length.toLocaleString()} GPU${rows.length === 1 ? '' : 's'} · ${ranked.length} with a value score at ${RES_LABEL[state.res]} ${WORK_LABEL[state.work]} using ${BASIS_LABEL[state.basis]} prices`;
+  $('#summary').textContent = `${rows.length.toLocaleString()} GPU${rows.length === 1 ? '' : 's'}${state.minFps ? ` averaging ${state.minFps}+ fps` : ''} · ${ranked.length} with a value score at ${RES_LABEL[state.res]} ${WORK_LABEL[state.work]} using ${BASIS_LABEL[state.basis]} prices`;
   renderPicks(ranked);
 
   document.querySelectorAll('.seg').forEach((seg) => seg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(state[seg.dataset.key] === b.dataset.v))));
@@ -309,6 +312,8 @@ function bind() {
   $('#minVram').addEventListener('change', (e) => update({ minVram: Number(e.target.value) }));
   $('#maxPrice').value = state.maxPrice ?? '';
   $('#maxPrice').addEventListener('input', (e) => update({ maxPrice: Number(e.target.value) || null }));
+  $('#minFps').value = state.minFps ?? '';
+  $('#minFps').addEventListener('input', (e) => update({ minFps: Number(e.target.value) || null }));
   $('#segment').value = state.segment;
   $('#segment').addEventListener('change', (e) => update({ segment: e.target.value }));
   $('#sort').addEventListener('change', (e) => update({ sort: e.target.value, dir: null }));

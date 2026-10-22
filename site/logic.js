@@ -50,6 +50,7 @@ export function derive(gpus, prices, state) {
     const perf = perfOf(g, state);
     const price = priceOf(g, prices, state.basis);
     if (state.maxPrice && (!price || price.price > state.maxPrice)) continue;
+    if (state.minFps && (!perf || perf.fps < state.minFps)) continue;
     const value = perf && price ? (perf.fps / price.price) * 100 : null;
     if (state.rankedOnly && value == null) continue;
     rows.push({ g, perf, price, value });

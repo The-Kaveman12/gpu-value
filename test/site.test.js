@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { derive, perfOf } from '../site/logic.js';
 
 const catalog = JSON.parse(await readFile(new URL('../site/data/gpus.json', import.meta.url), 'utf8'));
-const base = { q: '', res: '1440p', work: 'raster', basis: 'msrp', vendors: [], minVram: 0, maxPrice: null, segment: 'desktop', sort: 'value', dir: null, rankedOnly: false };
+const base = { q: '', res: '1440p', work: 'raster', basis: 'msrp', vendors: [], minVram: 0, maxPrice: null, minFps: null, segment: 'desktop', sort: 'value', dir: null, rankedOnly: false };
 
 test('catalog has every benchmarked card and only desktop/workstation segments', () => {
   assert.ok(catalog.gpus.length > 1000);
@@ -39,6 +39,10 @@ test('filters: search, vendor, VRAM, max price, ranked only', () => {
   assert.ok(s({ maxPrice: 400 }).every((r) => r.price.price <= 400));
   assert.equal(s({ rankedOnly: true }).length, 48);
   assert.ok(s({ segment: 'workstation' }).length > 100);
+  const fast = s({ minFps: 100 });
+  assert.ok(fast.length > 0 && fast.every((r) => r.perf.fps >= 100));
+  assert.ok(s({ minFps: 100, res: '4k' }).length < fast.length); // same target is harder at 4K
+  assert.ok(s({ minFps: 60, work: 'rt' }).every((r) => r.g.perf.rt['1440p'].fps >= 60));
 });
 
 test('mixed workload weights raster 70% and RT 30%', () => {
