@@ -122,6 +122,17 @@ test('page renders live multi-source prices and an opened detail panel', async (
   assert.equal(document.documentElement.dataset.theme, 'light');
   assert.equal(elements.get('#themeToggle').attrs['aria-checked'], 'false');
 
+  // Technologies dropdown: open, check an option, count badge, URL.
+  elements.get('#techMenu').hidden = true; // as in index.html
+  listeners.get('#techBtn:click')({ stopPropagation() {} });
+  assert.equal(elements.get('#techMenu').hidden, false);
+  assert.match(elements.get('#techMenu').innerHTML, /value="dlss5"/);
+  listeners.get('#techMenu:change')({ target: { type: 'checkbox', value: 'dlss5', checked: true } });
+  assert.equal(elements.get('#techCount').textContent, '1');
+  assert.match(elements.get('#summary').textContent, /^10 GPUs/);
+  listeners.get('#techMenu:click')({ stopPropagation() {}, target: { id: 'techClear' } });
+  assert.equal(elements.get('#techCount').hidden, true);
+
   // The info banner can be dismissed, and that's remembered.
   const banner = elements.get('#banner');
   assert.equal(banner.hidden, false);

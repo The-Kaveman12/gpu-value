@@ -22,5 +22,8 @@ await rewrite('index.html', [
   ['href="styles.css"', `href="styles.css?v=${version}"`],
   ['src="app.js"', `src="app.js?v=${version}"`],
 ]);
-await rewrite('app.js', [["from './logic.js'", `from './logic.js?v=${version}'`]]);
+await rewrite('app.js', [
+  ["from './logic.js'", `from './logic.js?v=${version}'`],
+  ["from './features.js'", `from './features.js?v=${version}'`],
+]);
 console.log(`Stamped site assets with version ${version}.`);

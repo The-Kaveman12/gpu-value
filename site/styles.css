@@ -45,7 +45,11 @@
 html { -webkit-text-size-adjust: 100%; }
 body {
   margin: 0;
-  background: var(--bg);
+  /* Soft glow behind the header. It lives on the page background so it fades out instead of ending in a hard edge. */
+  background:
+    radial-gradient(1200px 520px at 10% -120px, var(--accent-soft), transparent 70%) no-repeat,
+    radial-gradient(900px 520px at 90% -160px, var(--perf-soft), transparent 70%) no-repeat,
+    var(--bg);
   color: var(--text);
   font: 14px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   font-feature-settings: "cv11", "ss01";
@@ -58,13 +62,7 @@ button, input, select { font: inherit; color: inherit; }
 .num, .mono { font-variant-numeric: tabular-nums; }
 
 /* Hero ------------------------------------------------------------------ */
-.hero {
-  background:
-    radial-gradient(1200px 400px at 10% -10%, var(--accent-soft), transparent 60%),
-    radial-gradient(900px 400px at 90% -20%, var(--perf-soft), transparent 60%);
-  border-bottom: 1px solid var(--border);
-  padding: 28px 0 24px;
-}
+.hero { padding: 28px 0 8px; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; }
 .logo { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; }
 .logo svg { width: 18px; height: 18px; fill: none; stroke: #fff; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
@@ -282,4 +280,61 @@ button, input, select { font: inherit; color: inherit; }
   border: 0; border-radius: 6px; background: none; color: var(--muted); font-size: 18px; line-height: 1; cursor: pointer;
 }
 .banner-close:hover { background: color-mix(in srgb, var(--text) 10%, transparent); color: var(--text); }
-body, .list, .pick, .controls, .search input, .pill, .seg, .chips button { transition: background-color .2s, border-color .2s, color .2s; }
+.list, .pick, .controls, .search input, .pill, .seg, .chips button { transition: background-color .2s, border-color .2s, color .2s; }
+
+/* Technologies dropdown ---------------------------------------------------- */
+.dropdown { position: relative; }
+.dd-btn {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px 0 12px;
+  border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text);
+  font-size: 13px; cursor: pointer;
+}
+.dd-btn:hover { border-color: var(--faint); }
+.dd-btn.active { border-color: var(--text); }
+.dd-btn svg { width: 14px; height: 14px; fill: none; stroke: var(--faint); stroke-width: 2; transition: transform .15s; }
+.dd-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+.dd-btn:focus-visible { outline: 2px solid var(--perf); outline-offset: 2px; }
+.dd-count {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; display: inline-grid; place-items: center;
+  background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.dd-count[hidden] { display: none; }
+.dd-menu {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; width: 360px; max-height: min(70vh, 560px); overflow-y: auto;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 6px;
+  box-shadow: 0 12px 32px rgb(16 24 40 / 0.16), 0 2px 6px rgb(16 24 40 / 0.08);
+}
+.dd-group + .dd-group { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
+.dd-title { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); font-weight: 600; padding: 8px 10px 4px; }
+.check { position: relative; display: flex; gap: 10px; align-items: flex-start; padding: 7px 10px; border-radius: 8px; cursor: pointer; }
+.check:hover { background: var(--surface-2); }
+.check input { position: absolute; opacity: 0; pointer-events: none; }
+.check .box {
+  flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 5px; border: 1.5px solid var(--faint);
+  display: grid; place-items: center; transition: background-color .12s, border-color .12s;
+}
+.check .box::after {
+  content: ""; width: 8px; height: 4px; margin-top: -2px; border: solid #fff; border-width: 0 0 2px 2px;
+  transform: rotate(-45deg) scale(0); transition: transform .12s;
+}
+.check input:checked + .box { background: var(--accent); border-color: var(--accent); }
+.check input:checked + .box::after { transform: rotate(-45deg) scale(1); }
+.check input:focus-visible + .box { outline: 2px solid var(--perf); outline-offset: 2px; }
+.check .txt { display: grid; gap: 1px; font-size: 13px; }
+.check .txt b { font-weight: 550; }
+.check .txt small { color: var(--muted); font-size: 12px; line-height: 1.35; }
+.dd-foot {
+  display: flex; justify-content: space-between; align-items: center; gap: 10px;
+  border-top: 1px solid var(--border); margin-top: 4px; padding: 8px 10px 4px; font-size: 12px; color: var(--muted);
+}
+.dd-foot button { border: 0; background: none; color: var(--perf); font-weight: 600; cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+.dd-foot button:hover { background: var(--perf-soft); }
+.techs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 18px; }
+.techs li { display: flex; gap: 8px; align-items: flex-start; padding: 3px 0; cursor: help; }
+.techs svg { flex: none; width: 15px; height: 15px; margin-top: 2px; fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.techs li span { display: grid; color: var(--muted); font-size: 12px; }
+.techs li span b { color: var(--text); font-size: 13px; font-weight: 550; }
+@media (max-width: 680px) {
+  .dd-menu { position: fixed; left: 16px; right: 16px; top: auto; width: auto; margin-top: 6px; }
+  .techs { grid-template-columns: 1fr; }
+}

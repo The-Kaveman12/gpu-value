@@ -1,11 +1,12 @@
 // GPU Value: client-side filtering, sorting and rendering.
 
+import { FEATURE_GROUPS, FEATURES } from './features.js';
 import { derive as deriveRows, SORT_DIR, searchText, vendorKey } from './logic.js';
 
 const PAGE = 50;
 const DEFAULT_STALE_HOURS = 48;
 const MIN_LISTINGS = 3;
-const DEFAULTS = { q: '', res: '1440p', work: 'raster', basis: 'new', vendors: [], minVram: 0, maxPrice: null, minFps: null, segment: 'desktop', sort: 'value', dir: null, rankedOnly: false };
+const DEFAULTS = { q: '', res: '1440p', work: 'raster', basis: 'new', vendors: [], tech: [], minVram: 0, maxPrice: null, minFps: null, segment: 'desktop', sort: 'value', dir: null, rankedOnly: false };
 const RES_LABEL = { '1080p': '1080p', '1440p': '1440p', '4k': '4K' };
 const WORK_LABEL = { raster: 'raster', rt: 'ray tracing', mixed: 'mixed' };
 const BASIS_LABEL = { new: 'new', used: 'used', msrp: 'MSRP' };
@@ -42,6 +43,7 @@ function readUrl() {
   const s = { ...DEFAULTS };
   for (const k of ['q', 'res', 'work', 'basis', 'segment', 'sort', 'dir']) if (p.has(k)) s[k] = p.get(k);
   if (p.has('vendors')) s.vendors = p.get('vendors').split(',').filter(Boolean);
+  if (p.has('tech')) s.tech = p.get('tech').split(',').filter((id) => FEATURES.some((f) => f.id === id));
   if (p.has('minVram')) s.minVram = Number(p.get('minVram')) || 0;
   if (p.has('maxPrice')) s.maxPrice = Number(p.get('maxPrice')) || null;
   if (p.has('minFps')) s.minFps = Number(p.get('minFps')) || null;
@@ -164,6 +166,14 @@ ${ex ? `<ul>${ex}</ul>` : ''}</div>`;
 <p class="na" style="margin:6px 0 0">Listing counts in parentheses. eBay quotes need 3+ exact-model matches to be used.</p>`;
 }
 
+function techList(g) {
+  const items = FEATURES.filter((f) => g.tech?.[f.id]);
+  if (!items.length) return '';
+  return `<h4>Technologies</h4><ul class="techs">${items
+    .map((f) => `<li title="${esc(f.hint)}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span><b>${esc(f.label)}</b>${esc(g.tech[f.id])}</span></li>`)
+    .join('')}</ul>`;
+}
+
 function detailHtml(r) {
   const { g } = r;
   const specs = SPEC_FIELDS.filter(([k]) => g[k] != null && g[k] !== '')
@@ -172,6 +182,7 @@ function detailHtml(r) {
   const ebayQ = encodeURIComponent(g.benchmarkName ?? g.name);
   return `<div class="detail" role="row"><div role="cell">
 <h4>Specifications</h4><dl class="specs">${specs}</dl>
+${techList(g)}
 <div class="links">${g.url ? `<a href="${esc(g.url)}" target="_blank" rel="noopener">TechPowerUp spec page ↗</a>` : ''}
 <a href="https://www.ebay.com/sch/27386/i.html?_nkw=${ebayQ}&LH_BIN=1" target="_blank" rel="noopener">Search eBay ↗</a></div>
 </div><div role="cell">
@@ -292,7 +303,53 @@ function update(patch) {
 }
 
 // --- Events --------------------------------------------------------------------
+// --- Technologies dropdown --------------------------------------------------------
+function renderTechMenu() {
+  $('#techMenu').innerHTML = `${FEATURE_GROUPS.map((grp) => `<div class="dd-group"><div class="dd-title">${esc(grp.title)}</div>${grp.items
+    .map((f) => `<label class="check"><input type="checkbox" value="${f.id}"${state.tech.includes(f.id) ? ' checked' : ''}><span class="box" aria-hidden="true"></span><span class="txt"><b>${esc(f.label)}</b><small>${esc(f.hint)}</small></span></label>`)
+    .join('')}</div>`).join('')}
+<div class="dd-foot"><span>Cards must support every selected technology.</span><button type="button" id="techClear">Clear</button></div>`;
+}
+
+function syncTechButton() {
+  const n = state.tech.length;
+  $('#techCount').hidden = n === 0;
+  $('#techCount').textContent = String(n);
+  $('#techBtn').classList.toggle('active', n > 0);
+}
+
+function bindTech() {
+  const btn = $('#techBtn');
+  const menu = $('#techMenu');
+  const setOpen = (open) => {
+    menu.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+  };
+  renderTechMenu();
+  syncTechButton();
+  btn.addEventListener('click', (e) => { e.stopPropagation(); setOpen(menu.hidden); });
+  menu.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (e.target.id !== 'techClear') return;
+    update({ tech: [] });
+    renderTechMenu();
+    syncTechButton();
+  });
+  menu.addEventListener('change', (e) => {
+    if (e.target.type !== 'checkbox') return;
+    const id = e.target.value;
+    update({ tech: e.target.checked ? [...state.tech, id] : state.tech.filter((x) => x !== id) });
+    syncTechButton();
+  });
+  // Close on outside click or Escape.
+  globalThis.addEventListener?.('click', () => setOpen(false));
+  globalThis.addEventListener?.('keydown', (e) => {
+    if (e.key === 'Escape' && !menu.hidden) { setOpen(false); btn.focus(); }
+  });
+}
+
 function bind() {
+  bindTech();
   const q = $('#q');
   q.value = state.q;
   let t;

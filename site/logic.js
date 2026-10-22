@@ -7,7 +7,7 @@ const MAIN_VENDORS = new Set(['NVIDIA', 'AMD', 'Intel']);
 export const vendorKey = (g) => (MAIN_VENDORS.has(g.vendor) ? g.vendor : 'Other');
 
 export function searchText(g) {
-  return [g.name, g.vendor, g.architecture, g.gpuName, g.generation, g.memoryType, g.memorySize && `${g.memorySize}gb ${g.memorySize} gb`, g.releaseDate?.slice(0, 4)]
+  return [g.name, g.vendor, g.architecture, g.gpuName, g.generation, g.memoryType, g.memorySize && `${g.memorySize}gb ${g.memorySize} gb`, g.releaseDate?.slice(0, 4), ...Object.values(g.tech ?? {})]
     .filter(Boolean)
     .join(' ')
     .toLowerCase();
@@ -43,6 +43,7 @@ export function derive(gpus, prices, state) {
     if (state.segment !== 'all' && g.segment !== state.segment) continue;
     if (state.vendors.length && !state.vendors.includes(vendorKey(g))) continue;
     if ((g.memorySize ?? 0) < state.minVram) continue;
+    if (state.tech?.length && !state.tech.every((id) => g.tech?.[id])) continue;
     if (terms.length) {
       const hay = (g._search ??= searchText(g));
       if (!terms.every((t) => hay.includes(t))) continue;

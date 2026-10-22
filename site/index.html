@@ -64,6 +64,13 @@
         <button data-v="Intel"><i class="dot intel"></i>Intel</button>
         <button data-v="Other"><i class="dot other"></i>Other</button>
       </div>
+      <div class="dropdown" id="tech">
+        <button class="dd-btn" id="techBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="techMenu">
+          Technologies<span class="dd-count" id="techCount" hidden></span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </button>
+        <div class="dd-menu" id="techMenu" role="group" aria-label="Filter by technology" hidden></div>
+      </div>
       <label class="field">Min VRAM
         <select id="minVram"><option value="0">Any</option><option value="8">8 GB+</option><option value="12">12 GB+</option><option value="16">16 GB+</option><option value="20">20 GB+</option><option value="24">24 GB+</option></select>
       </label>
@@ -120,7 +127,7 @@
       </div>
       <div>
         <h3>Specs</h3>
-        <p>From the <a href="https://www.techpowerup.com/gpu-specs/" rel="noopener">TechPowerUp GPU Database</a>, via the open <a href="https://github.com/RightNow-AI/RightNow-GPU-Database" rel="noopener">RightNow GPU Database</a> (Apache-2.0). Laptop, integrated, console and data-center parts are excluded.</p>
+        <p>From the <a href="https://www.techpowerup.com/gpu-specs/" rel="noopener">TechPowerUp GPU Database</a>, via the open <a href="https://github.com/RightNow-AI/RightNow-GPU-Database" rel="noopener">RightNow GPU Database</a> (Apache-2.0). Laptop, integrated, console and data-center parts are excluded. Technology support (DLSS, FSR, XeSS, frame generation, AV1 and so on) is derived from each card&#39;s architecture using vendor support lists as of October 2026.</p>
       </div>
     </div>
     <p class="fine">Not affiliated with any retailer or manufacturer. Prices change constantly, so check the listing before you buy.</p>

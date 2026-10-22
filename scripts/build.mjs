@@ -4,6 +4,7 @@
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import { loadCatalog } from './lib/catalog.js';
+import { featuresFor } from './lib/features.js';
 
 const { specs, benchmarks, gpus } = await loadCatalog();
 
@@ -13,7 +14,7 @@ const doc = {
     specs: { name: specs.source, url: specs.sourceUrl, updated: specs.sourceUpdated, retrieved: specs.retrieved },
     benchmarks: { name: benchmarks.source, url: benchmarks.sourceUrl, updated: benchmarks.sourceUpdated, retrieved: benchmarks.retrieved },
   },
-  gpus: gpus.map(({ hasMemoryVariants, ...g }) => g),
+  gpus: gpus.map(({ hasMemoryVariants, ...g }) => ({ ...g, tech: featuresFor(g) })),
 };
 
 await mkdir(new URL('../site/data/', import.meta.url), { recursive: true });
