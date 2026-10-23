@@ -139,6 +139,36 @@ test('page renders live multi-source prices and an opened detail panel', async (
   listeners.get('#techMenu:click')({ stopPropagation() {}, target: { id: 'techClear' } });
   assert.equal(elements.get('#techCount').hidden, true);
 
+  // Price history chart and alert form in the opened card.
+  const opened = elements.get('#rows').innerHTML;
+  assert.match(opened, /<h4>Price history<\/h4><div class="pchart"/);
+  assert.match(opened, /<path class="line s-new" d="M/);
+  assert.match(opened, /<table class="sr-only"><caption>Price history/);
+  assert.match(opened, /Last 90 days: <span><b>New<\/b> \$/);
+  assert.match(opened, /<form class="alert-form" data-card="[^"]+"/);
+
+  // Creating an alert opens a pre-filled GitHub issue.
+  let openedUrl = null;
+  globalThis.open = (url) => { openedUrl = url; };
+  const form = { dataset: { card: 'amd-radeon-rx-9070-xt', name: 'Radeon RX 9070 XT' }, elements: { condition: { value: 'new' }, target: { value: '700' } } };
+  listeners.get('#rows:submit')({ target: { closest: () => form }, preventDefault() {} });
+  const issue = new URL(openedUrl);
+  assert.equal(issue.pathname, '/The-Kaveman12/gpu-value/issues/new');
+  assert.equal(issue.searchParams.get('labels'), 'price-watch');
+  assert.match(issue.searchParams.get('body'), /^card: amd-radeon-rx-9070-xt\ncondition: new\ntarget: 700\n/);
+
+  // Starring a card adds it to the watchlist; the Watchlist filter shows only starred cards.
+  const star = (cardId) => listeners.get('#rows:click')({ target: { closest: (s) => (s === '.star' ? { dataset: { star: cardId } } : null) } });
+  star('amd-radeon-rx-9070-xt');
+  assert.deepEqual(JSON.parse(saved.get('watchlist')), ['amd-radeon-rx-9070-xt']);
+  assert.equal(elements.get('#watchCount').textContent, '1');
+  listeners.get('#watchOnly:click')();
+  assert.match(elements.get('#summary').textContent, /^1 GPU /);
+  assert.match(elements.get('#rows').innerHTML, /class="star on"/);
+  listeners.get('#watchOnly:click')();
+  star('amd-radeon-rx-9070-xt');
+  assert.deepEqual(JSON.parse(saved.get('watchlist')), []);
+
   // The info banner can be dismissed, and that's remembered.
   const banner = elements.get('#banner');
   assert.equal(banner.hidden, false);

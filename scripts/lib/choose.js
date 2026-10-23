@@ -22,6 +22,9 @@ const TIERS = {
 const confident = (q) => q?.price != null && (q.listings == null || q.listings >= MIN_LISTINGS);
 const fresh = (q, now) => (now - new Date(q.fetched)) / 36e5 <= (SOURCES[q.source]?.staleAfterHours ?? 48);
 
+/** True if a quote is within its source's staleness window at `now`. */
+export const isFresh = (q, now = Date.now()) => fresh(q, now);
+
 /** quotes: { retail, ebayNew, ebayUsed, hdNew, hdUsed } (any may be missing). Returns a quote or null. */
 export function choosePrice(quotes, condition, now = Date.now()) {
   for (const requireFresh of [true, false]) {

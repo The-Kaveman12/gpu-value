@@ -15,5 +15,6 @@
   },
   "engines": {
     "node": ">=22"
-  }
+  },
+  "githubRepo": "The-Kaveman12/gpu-value"
 }

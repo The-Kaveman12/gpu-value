@@ -23,6 +23,12 @@ Prices need a free eBay developer key:
 
 Until the keys are added, new prices come from the retail tracker and used prices from the daily eBay snapshot.
 
+## Price history, watchlist and alerts
+
+- **History:** each run records that day's prices (only fresh quotes) to `history.json` on the `price-history` branch. The site shows a 90-day chart per card and tags prices as a "30-day low" or as below or above the 90-day average. Days before 2026-10-22 were rebuilt from Wayback Machine copies of Tom's Hardware's price tracker and HardwareDeals.co's daily eBay snapshots (`scripts/backfill-history.mjs`).
+- **Watchlist:** star cards to keep them in a list (saved in your browser) and filter to them with the **Watchlist** button.
+- **Price alerts:** in a card's details, set a target and click **Create alert**. That opens a pre-filled GitHub issue labeled `price-watch`. Submit it and the workflow checks right away, then after every price update. It comments, which emails you, when the price reaches the target, drops another 3%, or goes back above it. Close the issue to stop the alert.
+
 ## Monitoring
 
 - **Health alerts:** after every price update, `scripts/report-health.mjs` checks for stale sources, a drop in how many cards have prices, and new tracker cards that don't match the spec database. Problems open a GitHub issue labeled `data-health` (GitHub emails you). The issue is updated when the problems change and closes itself when the data recovers. Crashed scheduled runs are noted on the same issue.

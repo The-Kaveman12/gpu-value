@@ -25,5 +25,7 @@ await rewrite('index.html', [
 await rewrite('app.js', [
   ["from './logic.js'", `from './logic.js?v=${version}'`],
   ["from './features.js'", `from './features.js?v=${version}'`],
+  ["from './history.js'", `from './history.js?v=${version}'`],
+  ["from './pricechart.js'", `from './pricechart.js?v=${version}'`],
 ]);
 console.log(`Stamped site assets with version ${version}.`);

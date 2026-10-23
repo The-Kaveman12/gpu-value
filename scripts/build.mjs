@@ -2,14 +2,17 @@
 //
 //   node scripts/build.mjs
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { loadCatalog } from './lib/catalog.js';
 import { featuresFor } from './lib/features.js';
 
 const { specs, benchmarks, gpus } = await loadCatalog();
 
+const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+
 const doc = {
   built: new Date().toISOString(),
+  repo: process.env.GITHUB_REPOSITORY ?? pkg.githubRepo,
   sources: {
     specs: { name: specs.source, url: specs.sourceUrl, updated: specs.sourceUpdated, retrieved: specs.retrieved },
     benchmarks: { name: benchmarks.source, url: benchmarks.sourceUrl, updated: benchmarks.sourceUpdated, retrieved: benchmarks.retrieved },

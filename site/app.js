@@ -1,12 +1,14 @@
 // GPU Value: client-side filtering, sorting and rendering.
 
 import { FEATURE_GROUPS, FEATURES } from './features.js';
+import { dealOf, seriesFor, stats } from './history.js';
 import { derive as deriveRows, SORT_DIR, searchText, vendorKey } from './logic.js';
+import { bindPriceCharts, priceChartHtml } from './pricechart.js';
 
 const PAGE = 50;
 const DEFAULT_STALE_HOURS = 48;
 const MIN_LISTINGS = 3;
-const DEFAULTS = { q: '', res: '1440p', work: 'raster', basis: 'new', vendors: [], tech: [], minVram: 0, maxPrice: null, minFps: null, segment: 'desktop', sort: 'value', dir: null, rankedOnly: false };
+const DEFAULTS = { q: '', res: '1440p', work: 'raster', basis: 'new', vendors: [], tech: [], minVram: 0, maxPrice: null, minFps: null, segment: 'desktop', sort: 'value', dir: null, rankedOnly: false, watchOnly: false };
 const RES_LABEL = { '1080p': '1080p', '1440p': '1440p', '4k': '4K' };
 const WORK_LABEL = { raster: 'raster', rt: 'ray tracing', mixed: 'mixed' };
 const BASIS_LABEL = { new: 'new', used: 'used', msrp: 'MSRP' };
@@ -35,6 +37,9 @@ const SOURCE_HINT = {
 
 let DATA = { gpus: [], sources: {} };
 let PRICES = { cards: {}, sources: {} };
+let HISTORY = null; // price history (site/data/history.json)
+let ALERTS = []; // open price-alert issues (site/data/alerts.json)
+let WATCH = new Set(); // starred card ids, kept in this browser
 let state = { ...DEFAULTS };
 let limit = PAGE;
 const open = new Set();
@@ -50,12 +55,14 @@ function readUrl() {
   if (p.has('maxPrice')) s.maxPrice = Number(p.get('maxPrice')) || null;
   if (p.has('minFps')) s.minFps = Number(p.get('minFps')) || null;
   s.rankedOnly = p.get('ranked') === '1';
+  s.watchOnly = p.get('watch') === '1';
   return s;
 }
 function writeUrl() {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries(state)) {
     if (k === 'rankedOnly') { if (v) p.set('ranked', '1'); continue; }
+    if (k === 'watchOnly') { if (v) p.set('watch', '1'); continue; }
     const def = DEFAULTS[k];
     const val = Array.isArray(v) ? v.join(',') : v;
     if (val !== null && val !== '' && String(val) !== String(Array.isArray(def) ? def.join(',') : def)) p.set(k, val);
@@ -81,11 +88,30 @@ function tags(g, price) {
   return t.join('');
 }
 
-function priceCell(price) {
+const STAR_PATH = 'M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z';
+const DEAL_HINT = {
+  low: 'The lowest price recorded in the last 30 days',
+  good: 'Well below the average price over the last 90 days',
+  high: 'Well above the average price over the last 90 days',
+};
+
+function dealFor(g, price) {
+  if (!price || price.kind === 'msrp' || !HISTORY) return null;
+  return dealOf(seriesFor(HISTORY, g.id, price.kind, 90), price.price);
+}
+
+const dealTag = (deal) => (deal ? `<span class="deal ${deal.kind}" title="${esc(DEAL_HINT[deal.kind])}">${esc(deal.label)}</span>` : '');
+
+function priceCell(price, g) {
   if (!price) return `<span class="na">${state.basis === 'msrp' ? 'No MSRP' : 'No live price'}</span>`;
   if (price.kind === 'msrp') return `<div class="p">${money(price.price)}</div><div class="s">launch MSRP</div>`;
   const count = price.listings != null ? ` · ${price.listings} listing${price.listings === 1 ? '' : 's'}` : '';
-  return `<div class="p">${money(price.price)}</div><div class="s" title="${esc(SOURCE_HINT[price.source] ?? '')}">${esc(SOURCE_SHORT[price.source] ?? price.source)}${count} · ${esc(ago(price.fetched))}</div>`;
+  return `<div class="p">${money(price.price)} ${dealTag(dealFor(g, price))}</div><div class="s" title="${esc(SOURCE_HINT[price.source] ?? '')}">${esc(SOURCE_SHORT[price.source] ?? price.source)}${count} · ${esc(ago(price.fetched))}</div>`;
+}
+
+function starButton(g) {
+  const on = WATCH.has(g.id);
+  return `<button class="star${on ? ' on' : ''}" type="button" data-star="${esc(g.id)}" aria-pressed="${on}" aria-label="${on ? 'Remove from' : 'Add to'} watchlist" title="${on ? 'Remove from' : 'Add to'} watchlist"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${STAR_PATH}"/></svg></button>`;
 }
 
 function rowHtml(r, maxFps, maxValue) {
@@ -99,10 +125,10 @@ function rowHtml(r, maxFps, maxValue) {
     : '<span class="na">—</span>';
   return `<div class="row item${isOpen ? ' open' : ''}" role="row" data-id="${esc(g.id)}" tabindex="0" aria-expanded="${isOpen}">
   <div class="c-rank" role="cell">${r.rank ?? ''}</div>
-  <div class="c-gpu" role="cell"><div class="n"><i class="dot ${vendorKey(g).toLowerCase()}"></i>${esc(g.name)} ${tags(g, price)}</div><div class="s">${esc(gpuSubtitle(g))}</div></div>
+  <div class="c-gpu" role="cell"><div class="n">${starButton(g)}<i class="dot ${vendorKey(g).toLowerCase()}"></i>${esc(g.name)} ${tags(g, price)}${ALERTS.some((a) => a.card === g.id) ? '<span class="tag alert-tag" title="You have a price alert on this card">Alert</span>' : ''}</div><div class="s">${esc(gpuSubtitle(g))}</div></div>
   <div class="c-vram" role="cell">${g.memorySize ? `<b>${g.memorySize} GB</b><div class="s">${esc(g.memoryType ?? '')}</div>` : '<span class="na">—</span>'}</div>
   <div class="c-perf" role="cell">${perfCell}</div>
-  <div class="c-price" role="cell">${priceCell(price)}</div>
+  <div class="c-price" role="cell">${priceCell(price, g)}</div>
   <div class="c-value" role="cell">${valueCell}</div>
   <div class="c-tdp" role="cell">${g.tdp ? `${g.tdp} W` : '—'}</div>
   <div class="c-chev" role="cell">${CHEVRON}</div>
@@ -229,6 +255,37 @@ ${listings.length ? `<h5>Cheapest matching listings</h5><ul class="listings">${l
 </details>`;
 }
 
+function priceHistory(g) {
+  if (!HISTORY) return '<p class="note">Price history isn\'t available right now.</p>';
+  const series = { new: seriesFor(HISTORY, g.id, 'new', 90), used: seriesFor(HISTORY, g.id, 'used', 90) };
+  const chart = priceChartHtml(series, money);
+  if (!chart) return '<p class="note">Not enough price history for this card yet. It builds up from each day\'s prices.</p>';
+  const line = (label, pts) => {
+    const st = stats(pts);
+    return st ? `<span><b>${label}</b> ${money(st.min)}–${money(st.max)}, avg ${money(Math.round(st.avg))}</span>` : '';
+  };
+  return `${chart}<p class="note range">Last 90 days: ${[line('New', series.new), line('Used', series.used)].filter(Boolean).join(' · ')}</p>`;
+}
+
+function alertSection(g) {
+  const mine = ALERTS.filter((a) => a.card === g.id);
+  const current = PRICES.cards?.[g.id]?.new?.price;
+  const suggested = current ? Math.max(10, Math.floor((current * 0.9) / 10) * 10) : '';
+  const list = mine.length
+    ? `<ul class="alerts">${mine
+        .map((a) => `<li><span>${a.condition === 'new' ? 'New' : 'Used'} at or below <b>${money(a.target)}</b></span>${a.below ? '<span class="deal low">Target reached</span>' : '<span class="na">Watching</span>'}<a href="${esc(a.url)}" target="_blank" rel="noopener">#${a.number} ↗</a></li>`)
+        .join('')}</ul>`
+    : '';
+  return `${list}<form class="alert-form" data-card="${esc(g.id)}" data-name="${esc(g.name)}">
+<label class="field">When
+<select name="condition"><option value="new">New</option><option value="used">Used</option></select></label>
+<label class="field">is at or below
+<span class="money-input"><span>$</span><input name="target" type="number" min="1" step="1" required value="${suggested}" inputmode="numeric"></span></label>
+<button type="submit">Create alert</button>
+</form>
+<p class="note">Opens a pre-filled GitHub issue. Submit it and you'll get an email when the price reaches your target. Close the issue to stop the alert.</p>`;
+}
+
 function detailHtml(r) {
   const { g } = r;
   const ebayQ = encodeURIComponent(g.benchmarkName ?? g.name);
@@ -239,7 +296,7 @@ ${fullSpecs(g)}
 <div class="links">${g.url ? `<a href="${esc(g.url)}" target="_blank" rel="noopener">TechPowerUp specs ↗</a>` : ''}<a href="https://www.ebay.com/sch/27386/i.html?_nkw=${ebayQ}&LH_BIN=1" target="_blank" rel="noopener">Search eBay ↗</a></div>
 </div><div class="d-col" role="cell">
 <section><h4>Game benchmarks</h4>${benchTable(g)}${reviewLinks(g)}</section>
-${g.perf ? `<section><h4>Prices</h4>${priceTiles(g)}</section>${priceSources(g)}` : ''}
+${g.perf ? `<section><h4>Prices</h4>${priceTiles(g)}</section><section><h4>Price history</h4>${priceHistory(g)}</section><section><h4>Price alert</h4>${alertSection(g)}</section>${priceSources(g)}` : ''}
 </div></div>`;
 }
 
@@ -322,7 +379,10 @@ function bindChrome() {
 }
 
 function render() {
-  const { rows, ranked } = deriveRows(DATA.gpus, PRICES, state);
+  const { rows, ranked } = deriveRows(DATA.gpus, PRICES, { ...state, watchlist: [...WATCH] });
+  $('#watchOnly').setAttribute('aria-pressed', String(state.watchOnly));
+  $('#watchCount').hidden = WATCH.size === 0;
+  $('#watchCount').textContent = String(WATCH.size);
   const maxFps = Math.max(1, ...rows.map((r) => r.perf?.fps ?? 0));
   const maxValue = Math.max(1e-9, ...rows.map((r) => r.value ?? 0));
   const shown = rows.slice(0, limit);
@@ -441,12 +501,38 @@ function bind() {
     open.has(id) ? open.delete(id) : open.add(id);
     render();
   };
+  $('#watchOnly').addEventListener('click', () => update({ watchOnly: !state.watchOnly }));
+  $('#rows').addEventListener('submit', (e) => {
+    const form = e.target.closest('.alert-form');
+    if (!form) return;
+    e.preventDefault();
+    const condition = form.elements.condition.value;
+    const target = Math.round(Number(form.elements.target.value));
+    if (!(target > 0)) return;
+    const name = form.dataset.name;
+    const params = new URLSearchParams({
+      labels: 'price-watch',
+      title: `Price alert: ${name} (${condition}) at or below $${target}`,
+      body: `card: ${form.dataset.card}\ncondition: ${condition}\ntarget: ${target}\n\nCreated from GPU Value. You'll get a comment (and an email) when the price reaches the target. Close this issue to stop the alert.`,
+    });
+    globalThis.open?.(`https://github.com/${DATA.repo}/issues/new?${params}`, '_blank', 'noopener');
+  });
+  bindPriceCharts($('#rows'), money);
   $('#rows').addEventListener('click', (e) => {
+    const star = e.target.closest('.star');
+    if (star) {
+      const id = star.dataset.star;
+      WATCH.has(id) ? WATCH.delete(id) : WATCH.add(id);
+      store.set('watchlist', JSON.stringify([...WATCH]));
+      render();
+      return;
+    }
     if (e.target.closest('a, .detail')) return;
     const row = e.target.closest('.row.item');
     if (row) toggle(row.dataset.id);
   });
   $('#rows').addEventListener('keydown', (e) => {
+    if (e.target.closest('button, a, input, select, textarea')) return;
     const row = e.target.closest('.row.item');
     if (row && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggle(row.dataset.id); }
   });
@@ -462,12 +548,18 @@ function bind() {
 
 // --- Boot ----------------------------------------------------------------------
 async function main() {
-  const [gpus, prices] = await Promise.all([
+  const optional = (url) => fetch(url, { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const [gpus, prices, history, alerts] = await Promise.all([
     fetch('data/gpus.json').then((r) => r.json()),
-    fetch('data/prices.json', { cache: 'no-cache' }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    optional('data/prices.json'),
+    optional('data/history.json'),
+    optional('data/alerts.json'),
   ]);
   DATA = gpus;
   if (prices) PRICES = prices;
+  HISTORY = history;
+  ALERTS = Array.isArray(alerts) ? alerts : [];
+  try { WATCH = new Set(JSON.parse(store.get('watchlist') ?? '[]')); } catch { WATCH = new Set(); }
   for (const g of DATA.gpus) g._search = searchText(g);
 
   state = readUrl();

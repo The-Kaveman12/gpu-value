@@ -5,6 +5,8 @@ on:
     branches: [main]
   schedule:
     - cron: '17 */6 * * *' # every 6 hours
+  issues: # new or edited price alerts get checked right away
+    types: [opened, edited, reopened]
   workflow_dispatch:
     inputs:
       test_alert:
@@ -13,7 +15,7 @@ on:
         default: false
 
 permissions:
-  contents: read
+  contents: write # push the price-history branch
   pages: write
   id-token: write
   issues: write # health alerts
@@ -24,6 +26,8 @@ concurrency:
 
 jobs:
   build:
+    # Issue events only matter for price alerts.
+    if: github.event_name != 'issues' || contains(github.event.issue.labels.*.name, 'price-watch')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -48,6 +52,25 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           HEALTH_TEST_ALERT: ${{ inputs.test_alert }}
         run: node scripts/report-health.mjs
+      - name: Load price history
+        uses: actions/checkout@v7
+        with:
+          ref: price-history
+          path: history
+      - name: Record today's prices
+        run: node scripts/update-history.mjs history/history.json site/data/history.json
+      - name: Save price history
+        continue-on-error: true
+        working-directory: history
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add history.json
+          git diff --cached --quiet || { git commit -m "Prices for $(date -u +%F)" && git push; }
+      - name: Check price alerts
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/check-watches.mjs
       - name: Test
         run: npm test
       - name: Version asset URLs (cache busting)

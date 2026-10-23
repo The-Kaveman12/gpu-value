@@ -71,6 +71,10 @@
         </button>
         <div class="dd-menu" id="techMenu" role="group" aria-label="Filter by technology" hidden></div>
       </div>
+      <button class="dd-btn" id="watchOnly" type="button" aria-pressed="false" title="Show only cards you've starred">
+        <svg class="star-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
+        Watchlist<span class="dd-count" id="watchCount" hidden></span>
+      </button>
       <label class="field">Min VRAM
         <select id="minVram"><option value="0">Any</option><option value="8">8 GB+</option><option value="12">12 GB+</option><option value="16">16 GB+</option><option value="20">20 GB+</option><option value="24">24 GB+</option></select>
       </label>

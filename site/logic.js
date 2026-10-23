@@ -44,6 +44,7 @@ export function derive(gpus, prices, state) {
     if (state.vendors.length && !state.vendors.includes(vendorKey(g))) continue;
     if ((g.memorySize ?? 0) < state.minVram) continue;
     if (state.tech?.length && !state.tech.every((id) => g.tech?.[id])) continue;
+    if (state.watchOnly && !state.watchlist?.includes(g.id)) continue;
     if (terms.length) {
       const hay = (g._search ??= searchText(g));
       if (!terms.every((t) => hay.includes(t))) continue;
