@@ -142,8 +142,8 @@ test('page renders live multi-source prices and an opened detail panel', async (
   // Price history chart and alert form in the opened card.
   const opened = elements.get('#rows').innerHTML;
   assert.match(opened, /<h4>Price history<\/h4><div class="pchart"/);
-  assert.match(opened, /<path class="line s-new" d="M/);
-  assert.match(opened, /<table class="sr-only"><caption>Price history/);
+  assert.match(opened, /<path class="line s-1" d="M/);
+  assert.match(opened, /<details class="chart-data"><summary>Show data<\/summary>/);
   assert.match(opened, /Last 90 days: <span><b>New<\/b> \$/);
   assert.match(opened, /<form class="alert-form" data-card="[^"]+"/);
 
@@ -176,4 +176,75 @@ test('page renders live multi-source prices and an opened detail panel', async (
   listeners.get('#bannerClose:click')();
   assert.equal(banner.hidden, true);
   assert.equal(saved.get('dismissedBanner'), 'ebay-unconfigured');
+});
+
+test('compare: shared link opens the comparison; tray, differences, remove, cap and clear work', async () => {
+  const elements = new Map();
+  const listeners = new Map();
+  const el = (sel) => ({
+    innerHTML: '', textContent: '', value: '', checked: false, hidden: false, disabled: false, href: '', dataset: {}, attrs: {}, open: false,
+    addEventListener(type, fn) { listeners.set(`${sel}:${type}`, fn); },
+    setAttribute(k, v) { this.attrs[k] = v; }, classList: { toggle() {}, add() {}, remove() {} }, querySelectorAll: () => [],
+    showModal() { this.open = true; }, close() { this.open = false; },
+  });
+  globalThis.document = {
+    documentElement: { dataset: {} },
+    querySelector: (sel) => (sel.startsWith('meta') || sel.startsWith('.row.item[') ? null : elements.get(sel) ?? elements.set(sel, el(sel)).get(sel)),
+    querySelectorAll: () => [],
+  };
+  let url = '';
+  globalThis.location = { search: '?cmp=amd-radeon-rx-9070~1,amd-radeon-rx-9070-xt~2&cmpview=1', pathname: '/' };
+  globalThis.history = { replaceState(_, __, u) { url = u; } };
+  globalThis.fetch = async (u) => ({ ok: true, json: async () => JSON.parse(await readFile(new URL(`../site/${u}`, import.meta.url), 'utf8')) });
+  await import('../site/app.js?compare');
+  await new Promise((r) => setTimeout(r, 50));
+
+  // The link opened the dialog with both cards.
+  const dialog = elements.get('#cmpDialog');
+  assert.equal(dialog.open, true);
+  let body = elements.get('#cmpBody').innerHTML;
+  assert.match(body, /<b>Radeon RX 9070<\/b>/);
+  assert.match(body, /<b>Radeon RX 9070 XT<\/b>/);
+  assert.match(body, /Raster 1440p <span class="tag">Your setting<\/span>/);
+  assert.match(body, /<td class="best">117<span class="sr-only"> \(best\)<\/span><\/td>/);
+  assert.match(body, /New price, last 90 days/);
+  assert.match(body, /class="line s-1"/);
+  assert.match(body, /class="line s-2"/);
+  assert.match(url, /cmp=amd-radeon-rx-9070~1%2Camd-radeon-rx-9070-xt~2&cmpview=1|cmp=amd-radeon-rx-9070%7E1%2Camd-radeon-rx-9070-xt%7E2&cmpview=1/);
+  assert.equal(elements.get('#cmpOpen').textContent, 'Compare 2');
+
+  // Only differences hides rows that match (same architecture, same technologies).
+  assert.match(body, /<th scope="row">Architecture<\/th>/);
+  listeners.get('#cmpDiff:change')({ target: { checked: true } });
+  body = elements.get('#cmpBody').innerHTML;
+  assert.doesNotMatch(body, /<th scope="row">Architecture<\/th>/);
+  assert.match(body, /<th scope="row">Raster 1440p/);
+  assert.match(url, /cmpdiff=1/);
+
+  // Removing a card from inside the dialog down to one closes it.
+  const removeTarget = (id) => ({ target: { closest: (s) => (s === '[data-cmp-remove]' ? { dataset: { cmpRemove: id } } : null) } });
+  listeners.get('#cmpBody:click')(removeTarget('amd-radeon-rx-9070'));
+  assert.equal(dialog.open, false);
+  assert.equal(elements.get('#cmpTray').hidden, false);
+  assert.equal(elements.get('#cmpOpen').disabled, true);
+  assert.equal(elements.get('#cmpOpen').textContent, 'Add one more to compare');
+  assert.doesNotMatch(url, /cmpview/);
+
+  // Add from the list up to the cap of four; a fifth shows a note instead.
+  const addTarget = (id) => ({ target: { closest: (s) => (s === '[data-cmp]' ? { dataset: { cmp: id } } : null) } });
+  for (const id of ['nvidia-geforce-rtx-5070', 'amd-radeon-rx-9060-xt-16-gb', 'nvidia-geforce-rtx-5060-ti-16-gb']) listeners.get('#rows:click')(addTarget(id));
+  assert.equal(elements.get('#cmpOpen').textContent, 'Compare 4');
+  assert.match(elements.get('#cmpChips').innerHTML, /<i class="key s-1"><\/i>RTX 5070/); // took the freed slot 1
+  listeners.get('#rows:click')(addTarget('intel-arc-b580'));
+  assert.match(elements.get('#cmpNote').textContent, /up to 4 cards/);
+  assert.equal(elements.get('#cmpOpen').textContent, 'Compare 4');
+
+  // Open, then clear everything.
+  listeners.get('#cmpOpen:click')();
+  assert.equal(dialog.open, true);
+  assert.match(elements.get('#cmpBody').innerHTML, /--cols:4/);
+  listeners.get('#cmpClear:click')();
+  assert.equal(dialog.open, false);
+  assert.equal(elements.get('#cmpTray').hidden, true);
+  assert.doesNotMatch(url, /cmp=/);
 });

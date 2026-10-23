@@ -1,5 +1,6 @@
 // GPU Value: client-side filtering, sorting and rendering.
 
+import { addToCompare, buildComparison, decodeCompare, encodeCompare, MAX_COMPARE, removeFromCompare } from './compare.js';
 import { FEATURE_GROUPS, FEATURES } from './features.js';
 import { dealOf, seriesFor, stats } from './history.js';
 import { derive as deriveRows, SORT_DIR, searchText, vendorKey } from './logic.js';
@@ -8,7 +9,7 @@ import { bindPriceCharts, priceChartHtml } from './pricechart.js';
 const PAGE = 50;
 const DEFAULT_STALE_HOURS = 48;
 const MIN_LISTINGS = 3;
-const DEFAULTS = { q: '', res: '1440p', work: 'raster', basis: 'new', vendors: [], tech: [], minVram: 0, maxPrice: null, minFps: null, segment: 'desktop', sort: 'value', dir: null, rankedOnly: false, watchOnly: false };
+const DEFAULTS = { q: '', res: '1440p', work: 'raster', basis: 'new', vendors: [], tech: [], minVram: 0, maxPrice: null, minFps: null, segment: 'desktop', sort: 'value', dir: null, rankedOnly: false, watchOnly: false, cmp: [], cmpView: false, cmpDiff: false };
 const RES_LABEL = { '1080p': '1080p', '1440p': '1440p', '4k': '4K' };
 const WORK_LABEL = { raster: 'raster', rt: 'ray tracing', mixed: 'mixed' };
 const BASIS_LABEL = { new: 'new', used: 'used', msrp: 'MSRP' };
@@ -56,6 +57,9 @@ function readUrl() {
   if (p.has('minFps')) s.minFps = Number(p.get('minFps')) || null;
   s.rankedOnly = p.get('ranked') === '1';
   s.watchOnly = p.get('watch') === '1';
+  s.cmp = decodeCompare(p.get('cmp'), new Set(DATA.gpus.map((g) => g.id)));
+  s.cmpView = p.get('cmpview') === '1' && s.cmp.length >= 2;
+  s.cmpDiff = p.get('cmpdiff') === '1';
   return s;
 }
 function writeUrl() {
@@ -63,6 +67,9 @@ function writeUrl() {
   for (const [k, v] of Object.entries(state)) {
     if (k === 'rankedOnly') { if (v) p.set('ranked', '1'); continue; }
     if (k === 'watchOnly') { if (v) p.set('watch', '1'); continue; }
+    if (k === 'cmp') { if (v.length) p.set('cmp', encodeCompare(v)); continue; }
+    if (k === 'cmpView') { if (v) p.set('cmpview', '1'); continue; }
+    if (k === 'cmpDiff') { if (v) p.set('cmpdiff', '1'); continue; }
     const def = DEFAULTS[k];
     const val = Array.isArray(v) ? v.join(',') : v;
     if (val !== null && val !== '' && String(val) !== String(Array.isArray(def) ? def.join(',') : def)) p.set(k, val);
@@ -109,6 +116,15 @@ function priceCell(price, g) {
   return `<div class="p">${money(price.price)} ${dealTag(dealFor(g, price))}</div><div class="s" title="${esc(SOURCE_HINT[price.source] ?? '')}">${esc(SOURCE_SHORT[price.source] ?? price.source)}${count} · ${esc(ago(price.fetched))}</div>`;
 }
 
+const COMPARE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="7" height="14" rx="1.5"/><rect x="13.5" y="5" width="7" height="14" rx="1.5"/></svg>';
+const inCompare = (id) => state.cmp.some((c) => c.id === id);
+
+function compareButton(g) {
+  const on = inCompare(g.id);
+  const label = `${on ? 'Remove from' : 'Add to'} comparison`;
+  return `<button class="cmp-btn${on ? ' on' : ''}" type="button" data-cmp="${esc(g.id)}" aria-pressed="${on}" aria-label="${label}" title="${label}">${COMPARE_ICON}</button>`;
+}
+
 function starButton(g) {
   const on = WATCH.has(g.id);
   return `<button class="star${on ? ' on' : ''}" type="button" data-star="${esc(g.id)}" aria-pressed="${on}" aria-label="${on ? 'Remove from' : 'Add to'} watchlist" title="${on ? 'Remove from' : 'Add to'} watchlist"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${STAR_PATH}"/></svg></button>`;
@@ -125,7 +141,7 @@ function rowHtml(r, maxFps, maxValue) {
     : '<span class="na">—</span>';
   return `<div class="row item${isOpen ? ' open' : ''}" role="row" data-id="${esc(g.id)}" tabindex="0" aria-expanded="${isOpen}">
   <div class="c-rank" role="cell">${r.rank ?? ''}</div>
-  <div class="c-gpu" role="cell"><div class="n">${starButton(g)}<i class="dot ${vendorKey(g).toLowerCase()}"></i>${esc(g.name)} ${tags(g, price)}${ALERTS.some((a) => a.card === g.id) ? '<span class="tag alert-tag" title="You have a price alert on this card">Alert</span>' : ''}</div><div class="s">${esc(gpuSubtitle(g))}</div></div>
+  <div class="c-gpu" role="cell"><div class="n">${starButton(g)}${compareButton(g)}<i class="dot ${vendorKey(g).toLowerCase()}"></i>${esc(g.name)} ${tags(g, price)}${ALERTS.some((a) => a.card === g.id) ? '<span class="tag alert-tag" title="You have a price alert on this card">Alert</span>' : ''}</div><div class="s">${esc(gpuSubtitle(g))}</div></div>
   <div class="c-vram" role="cell">${g.memorySize ? `<b>${g.memorySize} GB</b><div class="s">${esc(g.memoryType ?? '')}</div>` : '<span class="na">—</span>'}</div>
   <div class="c-perf" role="cell">${perfCell}</div>
   <div class="c-price" role="cell">${priceCell(price, g)}</div>
@@ -258,7 +274,7 @@ ${listings.length ? `<h5>Cheapest matching listings</h5><ul class="listings">${l
 function priceHistory(g) {
   if (!HISTORY) return '<p class="note">Price history isn\'t available right now.</p>';
   const series = { new: seriesFor(HISTORY, g.id, 'new', 90), used: seriesFor(HISTORY, g.id, 'used', 90) };
-  const chart = priceChartHtml(series, money);
+  const chart = priceChartHtml([{ label: 'New', slot: 1, points: series.new }, { label: 'Used', slot: 2, points: series.used }], money);
   if (!chart) return '<p class="note">Not enough price history for this card yet. It builds up from each day\'s prices.</p>';
   const line = (label, pts) => {
     const st = stats(pts);
@@ -293,7 +309,7 @@ function detailHtml(r) {
 <section>${glance(g)}</section>
 ${techChips(g) ? `<section>${techChips(g)}</section>` : ''}
 ${fullSpecs(g)}
-<div class="links">${g.url ? `<a href="${esc(g.url)}" target="_blank" rel="noopener">TechPowerUp specs ↗</a>` : ''}<a href="https://www.ebay.com/sch/27386/i.html?_nkw=${ebayQ}&LH_BIN=1" target="_blank" rel="noopener">Search eBay ↗</a></div>
+<div class="links"><button type="button" class="btn small" data-cmp="${esc(g.id)}">${COMPARE_ICON}${inCompare(g.id) ? 'Remove from compare' : 'Add to compare'}</button>${g.url ? `<a href="${esc(g.url)}" target="_blank" rel="noopener">TechPowerUp specs ↗</a>` : ''}<a href="https://www.ebay.com/sch/27386/i.html?_nkw=${ebayQ}&LH_BIN=1" target="_blank" rel="noopener">Search eBay ↗</a></div>
 </div><div class="d-col" role="cell">
 <section><h4>Game benchmarks</h4>${benchTable(g)}${reviewLinks(g)}</section>
 ${g.perf ? `<section><h4>Prices</h4>${priceTiles(g)}</section><section><h4>Price history</h4>${priceHistory(g)}</section><section><h4>Price alert</h4>${alertSection(g)}</section>${priceSources(g)}` : ''}
@@ -405,7 +421,131 @@ function render() {
     b.classList.toggle('asc', dir === 'asc');
   });
   $('#sort').value = state.sort;
+  renderTray();
+  renderCompare();
   writeUrl();
+}
+
+// --- Compare ---------------------------------------------------------------------
+const shortName = (name) => name.replace(/^(GeForce|Radeon) /, '');
+const byId = (id) => DATA.gpus.find((g) => g.id === id);
+let noteTimer;
+
+function flashNote(text) {
+  $('#cmpNote').textContent = text;
+  clearTimeout(noteTimer);
+  noteTimer = setTimeout(() => ($('#cmpNote').textContent = ''), 4000);
+}
+
+function setCompare(list) {
+  state = { ...state, cmp: list, cmpView: state.cmpView && list.length >= 2 };
+  if (!state.cmpView) closeDialog();
+  render();
+}
+
+function toggleCompare(id) {
+  if (inCompare(id)) return setCompare(removeFromCompare(state.cmp, id));
+  if (state.cmp.length >= MAX_COMPARE) return flashNote(`You can compare up to ${MAX_COMPARE} cards. Remove one first.`);
+  setCompare(addToCompare(state.cmp, id));
+}
+
+function renderTray() {
+  const n = state.cmp.length;
+  $('#cmpTray').hidden = n === 0;
+  document.body?.classList.toggle('has-tray', n > 0);
+  if (!n) return;
+  $('#cmpChips').innerHTML = state.cmp
+    .map((c) => {
+      const name = shortName(byId(c.id)?.name ?? c.id);
+      return `<span class="cmp-chip"><i class="key s-${c.slot}"></i>${esc(name)}<button type="button" data-cmp-remove="${esc(c.id)}" aria-label="Remove ${esc(name)} from comparison" title="Remove">×</button></span>`;
+    })
+    .join('');
+  $('#cmpOpen').disabled = n < 2;
+  $('#cmpOpen').textContent = n < 2 ? 'Add one more to compare' : `Compare ${n}`;
+}
+
+function compareCell(row, i) {
+  const text = row.display[i];
+  if (row.tech) {
+    return text === '—'
+      ? '<td class="no"><span class="na">—</span></td>'
+      : `<td class="yes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>${esc(text.replace(/^✓ /, ''))}</td>`;
+  }
+  const best = row.best.includes(i);
+  return `<td class="${best ? 'best' : ''}${text === '—' ? ' na' : ''}">${esc(text)}${best ? '<span class="sr-only"> (best)</span>' : ''}</td>`;
+}
+
+function renderCompare() {
+  if (!state.cmpView) return;
+  const cards = state.cmp.map((c) => ({ ...c, g: byId(c.id) })).filter((c) => c.g);
+  const rows = buildComparison(cards.map((c) => c.g), { prices: PRICES, state, money, dealLabel: (g, p) => dealFor(g, p)?.label ?? '' });
+  const cols = cards.length + 1;
+  const head = `<tr><th class="corner" scope="col"><span class="sr-only">Spec</span></th>${cards
+    .map((c) => `<th scope="col"><div class="cmp-card"><i class="key s-${c.slot}"></i><div><b>${esc(c.g.name)}</b><span>${esc(gpuSubtitle(c.g))}</span></div><button type="button" class="cmp-remove" data-cmp-remove="${esc(c.id)}" aria-label="Remove ${esc(c.g.name)} from comparison" title="Remove">×</button></div></th>`)
+    .join('')}</tr>`;
+
+  const chart = priceChartHtml(cards.map((c) => ({ label: shortName(c.g.name), slot: c.slot, points: seriesFor(HISTORY, c.g.id, 'new', 90) })), money, { caption: 'New price history' });
+  let body = '';
+  let group = null;
+  for (const row of rows) {
+    if (state.cmpDiff && !row.differs) continue;
+    if (row.group !== group) {
+      if (group === 'Value & price') body += chartRows();
+      group = row.group;
+      body += `<tr class="grp"><th colspan="${cols}" scope="colgroup">${esc(group)}</th></tr>`;
+    }
+    const label = `${esc(row.label)}${row.current ? ' <span class="tag">Your setting</span>' : ''}`;
+    body += `<tr${row.current ? ' class="current"' : ''}><th scope="row"${row.hint ? ` title="${esc(row.hint)}"` : ''}>${label}</th>${row.display.map((_, i) => compareCell(row, i)).join('')}</tr>`;
+  }
+  if (group === 'Value & price') body += chartRows();
+  function chartRows() {
+    return `<tr class="grp"><th colspan="${cols}" scope="colgroup">New price, last 90 days</th></tr><tr class="chart-row"><td colspan="${cols}">${chart || '<p class="note">Not enough price history for these cards yet.</p>'}</td></tr>`;
+  }
+
+  $('#cmpDiff').checked = state.cmpDiff;
+  $('#cmpBody').innerHTML = `<p class="note cmp-sub">Using ${RES_LABEL[state.res]} ${WORK_LABEL[state.work]} performance and ${BASIS_LABEL[state.basis]} prices. The best value in each comparable row is highlighted.</p>
+<div class="cmp-scroll"><table class="cmp-table" style="--cols:${cards.length}"><thead>${head}</thead><tbody>${body || `<tr><td colspan="${cols}" class="note">These cards are identical in every row.</td></tr>`}</tbody></table></div>`;
+}
+
+function openDialog() {
+  const d = $('#cmpDialog');
+  if (!d.open) d.showModal?.();
+}
+function closeDialog() {
+  const d = $('#cmpDialog');
+  if (d.open) d.close?.();
+}
+
+function openCompare() {
+  if (state.cmp.length < 2) return;
+  state = { ...state, cmpView: true };
+  openDialog();
+  renderCompare();
+  writeUrl();
+}
+
+function closeCompare() {
+  if (!state.cmpView) return;
+  state = { ...state, cmpView: false };
+  closeDialog();
+  writeUrl();
+}
+
+function bindCompare() {
+  const removeOrToggle = (e) => {
+    const rm = e.target.closest('[data-cmp-remove]');
+    if (rm) setCompare(removeFromCompare(state.cmp, rm.dataset.cmpRemove));
+  };
+  $('#cmpChips').addEventListener('click', removeOrToggle);
+  $('#cmpBody').addEventListener('click', removeOrToggle);
+  $('#cmpClear').addEventListener('click', () => setCompare([]));
+  $('#cmpOpen').addEventListener('click', openCompare);
+  $('#cmpClose').addEventListener('click', closeCompare);
+  $('#cmpDiff').addEventListener('change', (e) => { state = { ...state, cmpDiff: e.target.checked }; renderCompare(); writeUrl(); });
+  const dialog = $('#cmpDialog');
+  dialog.addEventListener('close', () => { if (state.cmpView) { state = { ...state, cmpView: false }; writeUrl(); } }); // Esc
+  dialog.addEventListener('click', (e) => { if (e.target === dialog) closeCompare(); }); // backdrop
+  bindPriceCharts($('#cmpBody'), money);
 }
 
 function update(patch) {
@@ -462,6 +602,7 @@ function bindTech() {
 
 function bind() {
   bindTech();
+  bindCompare();
   const q = $('#q');
   q.value = state.q;
   let t;
@@ -519,6 +660,8 @@ function bind() {
   });
   bindPriceCharts($('#rows'), money);
   $('#rows').addEventListener('click', (e) => {
+    const cmp = e.target.closest('[data-cmp]');
+    if (cmp) { toggleCompare(cmp.dataset.cmp); return; }
     const star = e.target.closest('.star');
     if (star) {
       const id = star.dataset.star;
@@ -574,6 +717,7 @@ async function main() {
   renderSources();
   bind();
   render();
+  if (state.cmpView) openCompare(); // shared link straight into a comparison
 }
 
 main().catch((err) => {

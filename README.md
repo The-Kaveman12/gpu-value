@@ -29,6 +29,10 @@ Until the keys are added, new prices come from the retail tracker and used price
 - **Watchlist:** star cards to keep them in a list (saved in your browser) and filter to them with the **Watchlist** button.
 - **Price alerts:** in a card's details, set a target and click **Create alert**. That opens a pre-filled GitHub issue labeled `price-watch`. Submit it and the workflow checks right away, then after every price update. It comments, which emails you, when the price reaches the target, drops another 3%, or goes back above it. Close the issue to stop the alert.
 
+## Compare
+
+Click the compare icon on any row (or **Add to compare** in a card's details) to pick up to 4 cards. A tray at the bottom collects them; **Compare** opens a side-by-side table with value and prices, FPS at every resolution, a shared 90-day price chart, specs and technologies. The best value in each comparable row is highlighted, and **Only differences** hides rows where the cards match. The selection lives in the URL (`?cmp=…&cmpview=1`), so a comparison can be shared.
+
 ## Monitoring
 
 - **Health alerts:** after every price update, `scripts/report-health.mjs` checks for stale sources, a drop in how many cards have prices, and new tracker cards that don't match the spec database. Problems open a GitHub issue labeled `data-health` (GitHub emails you). The issue is updated when the problems change and closes itself when the data recovers. Crashed scheduled runs are noted on the same issue.

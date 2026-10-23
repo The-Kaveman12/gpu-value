@@ -138,6 +138,33 @@
   </section>
 </main>
 
+<div class="cmp-tray" id="cmpTray" role="region" aria-label="Cards to compare" hidden>
+  <div class="cmp-chips" id="cmpChips"></div>
+  <span class="cmp-note" id="cmpNote" aria-live="polite"></span>
+  <div class="cmp-actions">
+    <button type="button" class="btn ghost" id="cmpClear">Clear</button>
+    <button type="button" class="btn primary" id="cmpOpen">Compare</button>
+  </div>
+</div>
+
+<dialog class="cmp-dialog" id="cmpDialog" aria-labelledby="cmpTitle">
+  <div class="cmp-head">
+    <div class="cmp-title">
+      <h2 id="cmpTitle">Compare GPUs</h2>
+      <button type="button" class="cmp-close" id="cmpClose" aria-label="Close comparison" title="Close (Esc)">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="control-row">
+      <div class="seg" role="group" aria-label="Resolution" data-key="res"><button data-v="1080p">1080p</button><button data-v="1440p">1440p</button><button data-v="4k">4K</button></div>
+      <div class="seg" role="group" aria-label="Workload" data-key="work"><button data-v="raster">Raster</button><button data-v="rt">Ray tracing</button><button data-v="mixed" title="70% raster, 30% ray tracing">Mixed</button></div>
+      <div class="seg" role="group" aria-label="Price basis" data-key="basis"><button data-v="new">New</button><button data-v="used">Used</button><button data-v="msrp">MSRP</button></div>
+      <label class="toggle"><input id="cmpDiff" type="checkbox"><span></span>Only differences</label>
+    </div>
+  </div>
+  <div class="cmp-body" id="cmpBody"></div>
+</dialog>
+
 <footer class="wrap foot">
   <span id="built"></span>
   <a href="https://github.com/The-Kaveman12/gpu-value" id="repoLink" rel="noopener">Source on GitHub</a>
