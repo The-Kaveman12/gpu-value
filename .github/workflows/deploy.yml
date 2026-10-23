@@ -6,11 +6,17 @@ on:
   schedule:
     - cron: '17 */6 * * *' # every 6 hours
   workflow_dispatch:
+    inputs:
+      test_alert:
+        description: Send a test health alert (opens an issue; the next normal run closes it)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
   pages: write
   id-token: write
+  issues: write # health alerts
 
 concurrency:
   group: pages
@@ -35,6 +41,13 @@ jobs:
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           export PREVIOUS_PRICES_URL="https://${owner}.github.io/${GITHUB_REPOSITORY#*/}/data/prices.json"
           node scripts/fetch-prices.mjs
+      - name: Check price data health (opens/closes a GitHub issue)
+        if: always()
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          HEALTH_TEST_ALERT: ${{ inputs.test_alert }}
+        run: node scripts/report-health.mjs
       - name: Test
         run: npm test
       - name: Version asset URLs (cache busting)
@@ -53,3 +66,47 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v5
+
+  # GitHub pauses scheduled workflows after 60 days without repository activity,
+  # and price updates don't count. If the repo has been quiet for 45 days, commit
+  # a date marker so the 6-hourly updates keep running.
+  keepalive:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: Commit a marker if the repo has been quiet for 45+ days
+        run: |
+          age=$(( ( $(date +%s) - $(git log -1 --format=%ct) ) / 86400 ))
+          echo "Last commit was $age days ago."
+          if [ "$age" -ge 45 ]; then
+            date -u +%Y-%m-%d > .github/keepalive
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .github/keepalive
+            git commit -m "Keep scheduled price updates alive"
+            git push
+          fi
+
+  # If a scheduled or manual run crashes outright, say so on the health issue.
+  alert:
+    needs: [build, deploy]
+    if: failure() && github.event_name != 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh label create data-health --color d93f0b --description "Automated price data health alerts" -R "$GITHUB_REPOSITORY" 2>/dev/null || true
+          msg="The scheduled price update failed, so the site wasn't refreshed. Details: $RUN_URL"
+          n=$(gh issue list -R "$GITHUB_REPOSITORY" --label data-health --state open --json number --jq '.[0].number')
+          if [ -n "$n" ]; then
+            gh issue comment "$n" -R "$GITHUB_REPOSITORY" --body "$msg"
+          else
+            gh issue create -R "$GITHUB_REPOSITORY" --title "Price data needs attention" --label data-health --body "$msg"
+          fi
