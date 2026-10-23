@@ -23,6 +23,12 @@ Prices need a free eBay developer key:
 
 Until the keys are added, new prices come from the retail tracker and used prices from the daily eBay snapshot.
 
+## Monitoring
+
+- **Health alerts:** after every price update, `scripts/report-health.mjs` checks for stale sources, a drop in how many cards have prices, and new tracker cards that don't match the spec database. Problems open a GitHub issue labeled `data-health` (GitHub emails you). The issue is updated when the problems change and closes itself when the data recovers. Crashed scheduled runs are noted on the same issue.
+- **Test it:** go to **Actions → Refresh prices and deploy → Run workflow** and tick "Send a test health alert". The next normal run closes the test issue.
+- **Keep-alive:** GitHub pauses scheduled workflows after 60 days without repository activity. If the repo has had no commits for 45 days, the scheduled run commits a date to `.github/keepalive`. Run `git pull` before pushing if that has happened.
+
 ## Development
 
 Requires Node 22+ and has no dependencies.
