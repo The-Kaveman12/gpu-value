@@ -6,7 +6,7 @@ on:
   schedule:
     - cron: '17 */6 * * *' # every 6 hours
   issues: # new or edited price alerts get checked right away
-    types: [opened, edited, reopened]
+    types: [opened, edited, reopened, closed]
   workflow_dispatch:
     inputs:
       test_alert:
