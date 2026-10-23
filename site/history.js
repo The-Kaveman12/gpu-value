@@ -27,23 +27,41 @@ export function stats(points) {
 const MIN_POINTS = 10; // need at least this many days of history to judge a price
 
 /**
- * Judge the current price against recent history:
- *   'low'  — at (or within 1% of) the lowest price in the last 30 days, and at
- *            least 3% below the 90-day average (a price that has sat flat for a
- *            month is not a deal just because it's also the minimum)
- *   'good' — at least 5% below the 90-day average
- *   'high' — at least 8% above the 90-day average
- *   null   — typical, or not enough history
+ * Judge the current price against the card's own recent history:
+ *   'great' — at least 10% below the 90-day average, or the lowest price in
+ *             90 days (while at least 3% below average)
+ *   'good'  — at least 5% below the 90-day average, or the lowest price in
+ *             30 days (while at least 3% below average)
+ *   'high'  — at least 8% above the 90-day average
+ *   null    — typical, or not enough history
+ * The "at least 3% below average" guard keeps a price that has sat flat for
+ * months from counting as a deal just because it's also the minimum.
+ * Returns { kind, reason, label, pct, avg }: reason is short ("90-day low",
+ * "12% below avg"), label is the full tag text.
  */
 export function dealOf(points90, current) {
   if (current == null || points90.length < MIN_POINTS) return null;
   const last = dayMs(points90[points90.length - 1].day);
-  const last30 = points90.filter((p) => dayMs(p.day) > last - 30 * DAY_MS);
-  const low30 = Math.min(...last30.map((p) => p.price));
-  const { avg } = stats(points90);
+  const low30 = Math.min(...points90.filter((p) => dayMs(p.day) > last - 30 * DAY_MS).map((p) => p.price));
+  const { avg, min: low90 } = stats(points90);
   const pct = Math.round(((current - avg) / avg) * 100);
-  if (current <= low30 * 1.01 && pct <= -3) return { kind: 'low', label: '30-day low', pct };
-  if (pct <= -5) return { kind: 'good', label: `${-pct}% below 90-day avg`, pct };
-  if (pct >= 8) return { kind: 'high', label: `${pct}% above 90-day avg`, pct };
+  const below = `${-pct}% below avg`;
+  const make = (kind, reason) => ({
+    kind,
+    reason,
+    label: kind === 'high' ? reason : `${kind === 'great' ? 'Great' : 'Good'} deal · ${reason}`,
+    pct,
+    avg,
+  });
+
+  const at90Low = current <= low90 * 1.005 && pct <= -3;
+  const at30Low = current <= low30 * 1.01 && pct <= -3;
+  if (pct <= -10) return make('great', below);
+  if (at90Low) return make('great', '90-day low');
+  if (pct <= -5) return make('good', below);
+  if (at30Low) return make('good', '30-day low');
+  if (pct >= 8) return make('high', `${pct}% above avg`);
   return null;
 }
+
+export const isDeal = (deal) => deal?.kind === 'great' || deal?.kind === 'good';

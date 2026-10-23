@@ -248,3 +248,60 @@ test('compare: shared link opens the comparison; tray, differences, remove, cap 
   assert.equal(elements.get('#cmpTray').hidden, true);
   assert.doesNotMatch(url, /cmp=/);
 });
+
+test('deals: strip, count and Deals filter match the deals computed from the data', async () => {
+  const { dealOf, isDeal, seriesFor } = await import('../site/history.js');
+  const read = async (f) => JSON.parse(await readFile(new URL(`../site/data/${f}`, import.meta.url), 'utf8'));
+  const [gpus, prices, history] = [(await read('gpus.json')).gpus, await read('prices.json'), await read('history.json')];
+  const expected = gpus
+    .filter((g) => g.segment === 'desktop' && prices.cards[g.id]?.new)
+    .filter((g) => isDeal(dealOf(seriesFor(history, g.id, 'new', 90), prices.cards[g.id].new.price)))
+    .map((g) => g.name);
+
+  const elements = new Map();
+  const listeners = new Map();
+  const el = (sel) => ({
+    innerHTML: '', textContent: '', value: '', checked: false, hidden: false, disabled: false, href: '', dataset: {}, attrs: {}, open: false,
+    addEventListener(type, fn) { listeners.set(`${sel}:${type}`, fn); },
+    setAttribute(k, v) { this.attrs[k] = v; }, classList: { toggle() {}, add() {}, remove() {} }, querySelectorAll: () => [],
+  });
+  globalThis.document = {
+    documentElement: { dataset: {} },
+    querySelector: (sel) => (sel.startsWith('meta') || sel.startsWith('.row.item[') ? null : elements.get(sel) ?? elements.set(sel, el(sel)).get(sel)),
+    querySelectorAll: () => [],
+  };
+  let url = '';
+  globalThis.location = { search: '', pathname: '/' };
+  globalThis.history = { replaceState(_, __, u) { url = u; } };
+  globalThis.fetch = async (u) => ({ ok: true, json: async () => JSON.parse(await readFile(new URL(`../site/${u}`, import.meta.url), 'utf8')) });
+  await import('../site/app.js?deals');
+  await new Promise((r) => setTimeout(r, 50));
+
+  const strip = elements.get('#deals').innerHTML;
+  assert.match(strip, /<h2>Deals right now<\/h2>/);
+  if (expected.length === 0) {
+    assert.match(strip, /No unusual deals on new prices right now/);
+    assert.equal(elements.get('#dealCount').hidden, true);
+    return;
+  }
+  for (const name of expected.slice(0, 6)) assert.ok(strip.includes(`</i>${name}</span>`), `strip should list ${name}`);
+  assert.match(strip, /class="deal (great|good)"[^>]*>(Great|Good) deal · /);
+  assert.equal(elements.get('#dealCount').textContent, String(expected.length));
+
+  // Great deals come first.
+  const kinds = [...strip.matchAll(/class="deal-item (great|good)"/g)].map((m) => m[1]);
+  assert.deepEqual(kinds, [...kinds].sort((a, b) => (a === b ? 0 : a === 'great' ? -1 : 1)));
+
+  // The Deals filter shows exactly those cards and is saved in the URL.
+  listeners.get('#dealsOnly:click')();
+  assert.match(elements.get('#summary').textContent, new RegExp(`^${expected.length} GPUs?`));
+  assert.match(url, /deals=1/);
+  assert.equal(elements.get('#dealsOnly').attrs['aria-pressed'], 'true');
+  listeners.get('#dealsOnly:click')();
+  assert.doesNotMatch(url, /deals=1/);
+
+  // Clicking a deal opens that card's details.
+  const id = /data-id="([^"]+)"/.exec(strip)[1];
+  listeners.get('#deals:click')({ target: { closest: (s) => (s === '.deal-item' ? { dataset: { id } } : null) } });
+  assert.match(elements.get('#rows').innerHTML, new RegExp(`data-id="${id}"[^>]*aria-expanded="true"`));
+});

@@ -2,14 +2,14 @@
 
 import { addToCompare, buildComparison, decodeCompare, encodeCompare, MAX_COMPARE, removeFromCompare } from './compare.js';
 import { FEATURE_GROUPS, FEATURES } from './features.js';
-import { dealOf, seriesFor, stats } from './history.js';
-import { derive as deriveRows, SORT_DIR, searchText, vendorKey } from './logic.js';
+import { dealOf, isDeal, seriesFor, stats } from './history.js';
+import { derive as deriveRows, priceOf, SORT_DIR, searchText, vendorKey } from './logic.js';
 import { bindPriceCharts, priceChartHtml } from './pricechart.js';
 
 const PAGE = 50;
 const DEFAULT_STALE_HOURS = 48;
 const MIN_LISTINGS = 3;
-const DEFAULTS = { q: '', res: '1440p', work: 'raster', basis: 'new', vendors: [], tech: [], minVram: 0, maxPrice: null, minFps: null, segment: 'desktop', sort: 'value', dir: null, rankedOnly: false, watchOnly: false, cmp: [], cmpView: false, cmpDiff: false };
+const DEFAULTS = { q: '', res: '1440p', work: 'raster', basis: 'new', vendors: [], tech: [], minVram: 0, maxPrice: null, minFps: null, segment: 'desktop', sort: 'value', dir: null, rankedOnly: false, watchOnly: false, dealsOnly: false, cmp: [], cmpView: false, cmpDiff: false };
 const RES_LABEL = { '1080p': '1080p', '1440p': '1440p', '4k': '4K' };
 const WORK_LABEL = { raster: 'raster', rt: 'ray tracing', mixed: 'mixed' };
 const BASIS_LABEL = { new: 'new', used: 'used', msrp: 'MSRP' };
@@ -57,6 +57,7 @@ function readUrl() {
   if (p.has('minFps')) s.minFps = Number(p.get('minFps')) || null;
   s.rankedOnly = p.get('ranked') === '1';
   s.watchOnly = p.get('watch') === '1';
+  s.dealsOnly = p.get('deals') === '1';
   s.cmp = decodeCompare(p.get('cmp'), new Set(DATA.gpus.map((g) => g.id)));
   s.cmpView = p.get('cmpview') === '1' && s.cmp.length >= 2;
   s.cmpDiff = p.get('cmpdiff') === '1';
@@ -67,6 +68,7 @@ function writeUrl() {
   for (const [k, v] of Object.entries(state)) {
     if (k === 'rankedOnly') { if (v) p.set('ranked', '1'); continue; }
     if (k === 'watchOnly') { if (v) p.set('watch', '1'); continue; }
+    if (k === 'dealsOnly') { if (v) p.set('deals', '1'); continue; }
     if (k === 'cmp') { if (v.length) p.set('cmp', encodeCompare(v)); continue; }
     if (k === 'cmpView') { if (v) p.set('cmpview', '1'); continue; }
     if (k === 'cmpDiff') { if (v) p.set('cmpdiff', '1'); continue; }
@@ -97,9 +99,9 @@ function tags(g, price) {
 
 const STAR_PATH = 'M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z';
 const DEAL_HINT = {
-  low: 'The lowest price recorded in the last 30 days',
-  good: 'Well below the average price over the last 90 days',
-  high: 'Well above the average price over the last 90 days',
+  great: "At least 10% below this card's 90-day average price, or its lowest price in 90 days",
+  good: "At least 5% below this card's 90-day average price, or its lowest price in 30 days",
+  high: "At least 8% above this card's 90-day average price",
 };
 
 function dealFor(g, price) {
@@ -289,7 +291,7 @@ function alertSection(g) {
   const suggested = current ? Math.max(10, Math.floor((current * 0.9) / 10) * 10) : '';
   const list = mine.length
     ? `<ul class="alerts">${mine
-        .map((a) => `<li><span>${a.condition === 'new' ? 'New' : 'Used'} at or below <b>${money(a.target)}</b></span>${a.below ? '<span class="deal low">Target reached</span>' : '<span class="na">Watching</span>'}<a href="${esc(a.url)}" target="_blank" rel="noopener">#${a.number} ↗</a></li>`)
+        .map((a) => `<li><span>${a.condition === 'new' ? 'New' : 'Used'} at or below <b>${money(a.target)}</b></span>${a.below ? '<span class="deal good">Target reached</span>' : '<span class="na">Watching</span>'}<a href="${esc(a.url)}" target="_blank" rel="noopener">#${a.number} ↗</a></li>`)
         .join('')}</ul>`
     : '';
   return `${list}<form class="alert-form" data-card="${esc(g.id)}" data-name="${esc(g.name)}">
@@ -314,6 +316,49 @@ ${fullSpecs(g)}
 <section><h4>Game benchmarks</h4>${benchTable(g)}${reviewLinks(g)}</section>
 ${g.perf ? `<section><h4>Prices</h4>${priceTiles(g)}</section><section><h4>Price history</h4>${priceHistory(g)}</section><section><h4>Price alert</h4>${alertSection(g)}</section>${priceSources(g)}` : ''}
 </div></div>`;
+}
+
+/** Deal for every priced card at the current price basis: Map(id -> deal). */
+function currentDeals() {
+  const deals = new Map();
+  if (state.basis === 'msrp' || !HISTORY) return deals;
+  for (const id of Object.keys(PRICES.cards ?? {})) {
+    const g = DATA.gpus.find((x) => x.id === id);
+    const deal = g && dealFor(g, priceOf(g, PRICES, state.basis));
+    if (isDeal(deal)) deals.set(id, deal);
+  }
+  return deals;
+}
+
+function renderDeals(rows, deals) {
+  const el = $('#deals');
+  const basis = BASIS_LABEL[state.basis];
+  const found = rows
+    .filter((r) => deals.has(r.g.id))
+    .map((r) => ({ ...r, deal: deals.get(r.g.id) }))
+    .sort((a, b) => (a.deal.kind === b.deal.kind ? a.deal.pct - b.deal.pct : a.deal.kind === 'great' ? -1 : 1));
+  const head = (extra = '') => `<div class="deals-head"><h2>Deals right now</h2><span class="note">${state.basis === 'msrp' ? '' : `${basis[0].toUpperCase() + basis.slice(1)} prices that are unusually low for that card, compared with its own last 90 days.`}</span>${extra}</div>`;
+
+  if (state.basis === 'msrp') {
+    el.innerHTML = `${head()}<p class="note deals-empty">Switch the price basis to New or Used to see deals. Launch MSRPs don't change.</p>`;
+    return;
+  }
+  if (!found.length) {
+    const anyDeals = deals.size > 0;
+    el.innerHTML = `${head()}<p class="note deals-empty">${anyDeals
+      ? 'No deals match your current filters.'
+      : `No unusual deals on ${basis} prices right now. Most cards are at or above their 90-day average.`}</p>`;
+    return;
+  }
+  const more = found.length > 6 ? `<button type="button" class="btn small" data-deals-all>Show all ${found.length}</button>` : '';
+  el.innerHTML = `${head(more)}<div class="deal-list">${found
+    .slice(0, 6)
+    .map((r) => `<button type="button" class="deal-item ${r.deal.kind}" data-id="${esc(r.g.id)}">
+<span class="deal-name"><i class="dot ${vendorKey(r.g).toLowerCase()}"></i>${esc(r.g.name)}</span>
+<span class="deal-price"><b>${money(r.price.price)}</b><span class="deal ${r.deal.kind}" title="${esc(DEAL_HINT[r.deal.kind])}">${esc(r.deal.label)}</span></span>
+<span class="deal-meta">90-day avg ${money(Math.round(r.deal.avg))}${r.value != null ? ` · ${r.value.toFixed(1)} fps/$100 · #${r.rank} value` : ''}</span>
+</button>`)
+    .join('')}</div>`;
 }
 
 function renderPicks(ranked) {
@@ -395,7 +440,12 @@ function bindChrome() {
 }
 
 function render() {
-  const { rows, ranked } = deriveRows(DATA.gpus, PRICES, { ...state, watchlist: [...WATCH] });
+  const deals = currentDeals();
+  const { rows, ranked } = deriveRows(DATA.gpus, PRICES, { ...state, watchlist: [...WATCH], dealIds: new Set(deals.keys()) });
+  const dealRows = rows.filter((r) => deals.has(r.g.id)).length;
+  $('#dealsOnly').setAttribute('aria-pressed', String(state.dealsOnly));
+  $('#dealCount').hidden = dealRows === 0;
+  $('#dealCount').textContent = String(dealRows);
   $('#watchOnly').setAttribute('aria-pressed', String(state.watchOnly));
   $('#watchCount').hidden = WATCH.size === 0;
   $('#watchCount').textContent = String(WATCH.size);
@@ -411,6 +461,7 @@ function render() {
   $('#more').hidden = rows.length <= limit;
   $('#more').textContent = `Show more (${(rows.length - limit).toLocaleString()} left)`;
   $('#summary').textContent = `${rows.length.toLocaleString()} GPU${rows.length === 1 ? '' : 's'}${state.minFps ? ` averaging ${state.minFps}+ fps` : ''} · ${ranked.length} with a value score at ${RES_LABEL[state.res]} ${WORK_LABEL[state.work]} using ${BASIS_LABEL[state.basis]} prices`;
+  renderDeals(rows, deals);
   renderPicks(ranked);
 
   document.querySelectorAll('.seg').forEach((seg) => seg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(state[seg.dataset.key] === b.dataset.v))));
@@ -548,6 +599,16 @@ function bindCompare() {
   bindPriceCharts($('#cmpBody'), money);
 }
 
+/** Open a card's details and scroll to it, showing more rows first if it's further down the list. */
+function reveal(id) {
+  const { rows } = deriveRows(DATA.gpus, PRICES, { ...state, watchlist: [...WATCH], dealIds: new Set(currentDeals().keys()) });
+  const index = rows.findIndex((r) => r.g.id === id);
+  if (index >= limit) limit = Math.ceil((index + 1) / PAGE) * PAGE;
+  open.add(id);
+  render();
+  document.querySelector(`.row.item[data-id="${CSS.escape(id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
 function update(patch) {
   state = { ...state, ...patch };
   limit = PAGE;
@@ -643,6 +704,12 @@ function bind() {
     render();
   };
   $('#watchOnly').addEventListener('click', () => update({ watchOnly: !state.watchOnly }));
+  $('#dealsOnly').addEventListener('click', () => update({ dealsOnly: !state.dealsOnly }));
+  $('#deals').addEventListener('click', (e) => {
+    if (e.target.closest('[data-deals-all]')) return update({ dealsOnly: true });
+    const item = e.target.closest('.deal-item');
+    if (item) reveal(item.dataset.id);
+  });
   $('#rows').addEventListener('submit', (e) => {
     const form = e.target.closest('.alert-form');
     if (!form) return;
@@ -681,10 +748,7 @@ function bind() {
   });
   $('#picks').addEventListener('click', (e) => {
     const b = e.target.closest('.pick');
-    if (!b) return;
-    open.add(b.dataset.id);
-    render();
-    document.querySelector(`.row.item[data-id="${CSS.escape(b.dataset.id)}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (b) reveal(b.dataset.id);
   });
   $('#more').addEventListener('click', () => { limit += PAGE * 2; render(); });
 }

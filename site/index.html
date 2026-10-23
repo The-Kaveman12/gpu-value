@@ -39,6 +39,8 @@
 <main class="wrap">
   <div id="banner" class="banner" hidden><span id="bannerText"></span><button class="banner-close" id="bannerClose" type="button" aria-label="Dismiss this message" title="Dismiss">×</button></div>
 
+  <section class="deals" id="deals" aria-label="Deals right now"></section>
+
   <section class="picks" id="picks" aria-label="Best value picks"></section>
 
   <section class="controls" aria-label="Filters">
@@ -74,6 +76,10 @@
       <button class="dd-btn" id="watchOnly" type="button" aria-pressed="false" title="Show only cards you've starred">
         <svg class="star-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z"/></svg>
         Watchlist<span class="dd-count" id="watchCount" hidden></span>
+      </button>
+      <button class="dd-btn" id="dealsOnly" type="button" aria-pressed="false" title="Show only cards priced unusually low for that card">
+        <svg class="tag-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 12.6V4.5a1 1 0 0 1 1-1h8.1l7.9 7.9a1.5 1.5 0 0 1 0 2.1l-6 6a1.5 1.5 0 0 1-2.1 0z"/><circle cx="8.5" cy="8.5" r="1.6"/></svg>
+        Deals<span class="dd-count" id="dealCount" hidden></span>
       </button>
       <label class="field">Min VRAM
         <select id="minVram"><option value="0">Any</option><option value="8">8 GB+</option><option value="12">12 GB+</option><option value="16">16 GB+</option><option value="20">20 GB+</option><option value="24">24 GB+</option></select>
@@ -124,6 +130,7 @@
       <div>
         <h3>Prices</h3>
         <p><strong>New:</strong> the lower of the best current US retail price from <a href="https://www.tomshardware.com/pc-components/gpus/lowest-gpu-prices-tracking" rel="noopener">Tom's Hardware's GPU price tracker</a> and live eBay listings. <strong>Used:</strong> eBay listings. eBay prices are the median of the 5 cheapest listings that match the exact model (a 5070 never counts as a 5070 Ti), with empty boxes and parts-only cards dropped, and need at least 3 matches. Until the live eBay API is connected, eBay data comes from <a href="https://github.com/HardwareDealsCo/gpu-deals" rel="noopener">HardwareDeals.co's daily listing snapshot</a>. Open any card to see every source.</p>
+        <p><strong>Deals</strong> compare a card&#39;s current price with its own last 90 days. A <em>great deal</em> is at least 10% below its 90-day average, or its lowest price in 90 days. A <em>good deal</em> is at least 5% below average, or its lowest in 30 days. A deal means cheap for that card, not necessarily good value overall, so check FPS per $100 too.</p>
       </div>
       <div>
         <h3>Performance</h3>

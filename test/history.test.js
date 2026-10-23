@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { recordDay, sliceHistory, valuesFromPrices } from '../scripts/lib/history.js';
-import { dealOf, seriesFor, stats } from '../site/history.js';
+import { dealOf, isDeal, seriesFor, stats } from '../site/history.js';
 
 test('recordDay appends, overwrites the same day, inserts backfilled days and skips empty days', () => {
   let h = recordDay(null, '2026-10-20', { a: { n: 500, u: 400 } });
@@ -49,15 +49,29 @@ test('seriesFor returns non-null points inside the window', () => {
   assert.deepEqual(stats(daily([1, 2, 3])), { min: 1, max: 3, avg: 2, n: 3 });
 });
 
-test('dealOf: lows, below and above average, flat prices, thin history', () => {
-  const rising = daily([...Array(60).fill(500), ...Array(30).fill(600)]);
-  assert.equal(dealOf(rising, 600).kind, 'high'); // 600 vs avg 533 = +13%
+test('dealOf tiers: great, good, above average, flat prices, thin history', () => {
+  const pick = (d) => d && [d.kind, d.reason];
+  // 15%+ under average: great, however it got there.
+  const steady = daily(Array(90).fill(600));
+  assert.deepEqual(pick(dealOf(steady, 510)), ['great', '15% below avg']);
+  // Lowest in 90 days but only 7% under average: great, labelled as the 90-day low.
   const falling = daily([...Array(60).fill(600), ...Array(30).fill(560)]);
-  assert.equal(dealOf(falling, 540).kind, 'low'); // new 30-day low, 7% under average
-  // Below average but above a recent dip to $500: "good", not a 30-day low.
+  assert.deepEqual(pick(dealOf(falling, 550)), ['great', '90-day low']);
+  // 5-9% under average, above a recent dip: good.
   const dipped = daily([...Array(60).fill(600), ...Array(5).fill(500), ...Array(25).fill(580)]);
-  assert.deepEqual(dealOf(dipped, 550), { kind: 'good', label: '7% below 90-day avg', pct: -7 });
-  assert.equal(dealOf(daily(Array(90).fill(765)), 765), null); // flat for months: not a deal
+  assert.deepEqual(pick(dealOf(dipped, 550)), ['good', '7% below avg']);
+  assert.equal(dealOf(dipped, 550).label, 'Good deal · 7% below avg');
+  // Lowest in 30 days, 4% under average, but not the 90-day low: good.
+  const lowEarlier = daily([...Array(30).fill(600), ...Array(5).fill(480), ...Array(25).fill(600), ...Array(30).fill(560)]);
+  assert.deepEqual(pick(dealOf(lowEarlier, 556)), ['good', '30-day low']);
+  // Above average.
+  const rising = daily([...Array(60).fill(500), ...Array(30).fill(600)]);
+  assert.deepEqual(pick(dealOf(rising, 600)), ['high', '12% above avg']);
+  assert.equal(dealOf(rising, 600).label, '12% above avg'); // 600 vs avg 533.33 = +12.49%
+  // Not deals.
+  assert.equal(dealOf(daily(Array(90).fill(765)), 765), null); // flat for months
   assert.equal(dealOf(daily([500, 500, 500]), 400), null); // too little history
   assert.equal(dealOf(rising, null), null);
+  assert.equal(isDeal(dealOf(steady, 510)), true);
+  assert.equal(isDeal(dealOf(rising, 600)), false);
 });

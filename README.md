@@ -26,6 +26,7 @@ Until the keys are added, new prices come from the retail tracker and used price
 ## Price history, watchlist and alerts
 
 - **History:** each run records that day's prices (only fresh quotes) to `history.json` on the `price-history` branch. The site shows a 90-day chart per card and tags prices as a "30-day low" or as below or above the 90-day average. Days before 2026-10-22 were rebuilt from Wayback Machine copies of Tom's Hardware's price tracker and HardwareDeals.co's daily eBay snapshots (`scripts/backfill-history.mjs`).
+- **Deals:** a card is a *great deal* at 10%+ below its 90-day average (or its 90-day low) and a *good deal* at 5%+ below (or its 30-day low), with a 3%-below-average floor so long-flat prices never count. The **Deals** button filters to them, and the "Deals right now" strip lists them with FPS per $100 and value rank.
 - **Watchlist:** star cards to keep them in a list (saved in your browser) and filter to them with the **Watchlist** button.
 - **Price alerts:** in a card's details, set a target and click **Create alert**. That opens a pre-filled GitHub issue labeled `price-watch`. Submit it and the workflow checks right away, then after every price update. It comments, which emails you, when the price reaches the target, drops another 3%, or goes back above it. Close the issue to stop the alert.
 
