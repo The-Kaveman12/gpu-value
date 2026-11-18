@@ -12,7 +12,7 @@ const MIN_LISTINGS = 3;
 const DEFAULTS = { q: '', res: '1440p', work: 'raster', basis: 'new', vendors: [], tech: [], minVram: 0, maxPrice: null, minFps: null, segment: 'desktop', sort: 'value', dir: null, rankedOnly: false, watchOnly: false, dealsOnly: false, cmp: [], cmpView: false, cmpDiff: false };
 const RES_LABEL = { '1080p': '1080p', '1440p': '1440p', '4k': '4K' };
 const WORK_LABEL = { raster: 'raster', rt: 'ray tracing', mixed: 'mixed' };
-const BASIS_LABEL = { new: 'new', used: 'used', msrp: 'MSRP' };
+const BASIS_LABEL = { new: 'new', used: 'used', any: 'new or used', msrp: 'MSRP' };
 
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -115,7 +115,8 @@ function priceCell(price, g) {
   if (!price) return `<span class="na">${state.basis === 'msrp' ? 'No MSRP' : 'No live price'}</span>`;
   if (price.kind === 'msrp') return `<div class="p">${money(price.price)}</div><div class="s">launch MSRP</div>`;
   const count = price.listings != null ? ` · ${price.listings} listing${price.listings === 1 ? '' : 's'}` : '';
-  return `<div class="p">${money(price.price)} ${dealTag(dealFor(g, price))}</div><div class="s" title="${esc(SOURCE_HINT[price.source] ?? '')}">${esc(SOURCE_SHORT[price.source] ?? price.source)}${count} · ${esc(ago(price.fetched))}</div>`;
+  const cond = state.basis === 'any' ? `${price.kind} · ` : '';
+  return `<div class="p">${money(price.price)} ${dealTag(dealFor(g, price))}</div><div class="s" title="${esc(SOURCE_HINT[price.source] ?? '')}">${cond}${esc(SOURCE_SHORT[price.source] ?? price.source)}${count} · ${esc(ago(price.fetched))}</div>`;
 }
 
 const COMPARE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="7" height="14" rx="1.5"/><rect x="13.5" y="5" width="7" height="14" rx="1.5"/></svg>';
@@ -355,7 +356,7 @@ function renderDeals(rows, deals) {
     .slice(0, 6)
     .map((r) => `<button type="button" class="deal-item ${r.deal.kind}" data-id="${esc(r.g.id)}">
 <span class="deal-name"><i class="dot ${vendorKey(r.g).toLowerCase()}"></i>${esc(r.g.name)}</span>
-<span class="deal-price"><b>${money(r.price.price)}</b><span class="deal ${r.deal.kind}" title="${esc(DEAL_HINT[r.deal.kind])}">${esc(r.deal.label)}</span></span>
+<span class="deal-price"><b>${money(r.price.price)}</b>${state.basis === 'any' ? `<span class="na">${r.price.kind}</span>` : ''}<span class="deal ${r.deal.kind}" title="${esc(DEAL_HINT[r.deal.kind])}">${esc(r.deal.label)}</span></span>
 <span class="deal-meta">90-day avg ${money(Math.round(r.deal.avg))}${r.value != null ? ` · ${r.value.toFixed(1)} fps/$100 · #${r.rank} value` : ''}</span>
 </button>`)
     .join('')}</div>`;
@@ -369,7 +370,7 @@ function renderPicks(ranked) {
   el.innerHTML = top.map((r, i) => `<button class="pick" data-id="${esc(r.g.id)}">
 <div class="label">${labels[i]} · ${RES_LABEL[state.res]} ${WORK_LABEL[state.work]}</div>
 <div class="name"><i class="dot ${vendorKey(r.g).toLowerCase()}"></i> ${esc(r.g.name)}</div>
-<div class="stats"><div class="v"><b>${r.value.toFixed(1)}</b>fps/$100</div><div><b>${r.perf.fps.toFixed(0)}</b>avg fps</div><div><b>${money(r.price.price)}</b>${BASIS_LABEL[state.basis]}</div><div><b>${r.g.memorySize} GB</b>VRAM</div></div>
+<div class="stats"><div class="v"><b>${r.value.toFixed(1)}</b>fps/$100</div><div><b>${r.perf.fps.toFixed(0)}</b>avg fps</div><div><b>${money(r.price.price)}</b>${r.price.kind === 'msrp' ? 'MSRP' : r.price.kind}</div><div><b>${r.g.memorySize} GB</b>VRAM</div></div>
 </button>`).join('');
 }
 

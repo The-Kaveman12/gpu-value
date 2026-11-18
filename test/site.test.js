@@ -169,13 +169,58 @@ test('page renders live multi-source prices and an opened detail panel', async (
   star('amd-radeon-rx-9070-xt');
   assert.deepEqual(JSON.parse(saved.get('watchlist')), []);
 
-  // The info banner can be dismissed, and that's remembered.
+  // Whichever banner the data calls for (info or stale warning) can be dismissed,
+  // and that's remembered. This must not depend on how fresh the live data is:
+  // a stale source would otherwise fail CI and block deploys (as on Nov 13-17).
   const banner = elements.get('#banner');
-  assert.equal(banner.hidden, false);
-  assert.match(elements.get('#bannerText').textContent, /Tom’s Hardware/);
-  listeners.get('#bannerClose:click')();
-  assert.equal(banner.hidden, true);
-  assert.equal(saved.get('dismissedBanner'), 'ebay-unconfigured');
+  if (!banner.hidden) {
+    const key = banner.dataset.key;
+    assert.ok(key, 'a shown banner has a key');
+    assert.ok(elements.get('#bannerText').textContent.length > 0);
+    listeners.get('#bannerClose:click')();
+    assert.equal(banner.hidden, true);
+    assert.equal(saved.get('dismissedBanner'), key);
+  }
+});
+
+test('banner: info while eBay is unconfigured, warning when every source is stale', async () => {
+  const read = async (f) => JSON.parse(await readFile(new URL(`../site/data/${f}`, import.meta.url), 'utf8'));
+  const prices = await read('prices.json');
+  const now = Date.parse(prices.updated);
+  const at = (hoursAgo) => new Date(now - hoursAgo * 36e5).toISOString();
+  const withSources = (retailHours, hdHours) => ({
+    ...prices,
+    sources: {
+      retail: { status: 'live', updated: at(retailHours), staleAfterHours: 240 },
+      ebay: { status: 'unconfigured', staleAfterHours: 48 },
+      hardwaredeals: { status: 'live', updated: at(hdHours), staleAfterHours: 72 },
+    },
+  });
+  const bannerFor = async (doc, tag) => {
+    const elements = new Map();
+    const el = () => ({ innerHTML: '', textContent: '', value: '', checked: false, hidden: false, dataset: {}, attrs: {}, addEventListener() {}, setAttribute() {}, classList: { toggle() {}, add() {}, remove() {} }, querySelectorAll: () => [], showModal() {}, close() {} });
+    globalThis.document = { documentElement: { dataset: {} }, querySelector: (s) => (s.startsWith('meta') || s.startsWith('.row.item[') ? null : elements.get(s) ?? elements.set(s, el()).get(s)), querySelectorAll: () => [] };
+    globalThis.localStorage = { getItem: () => null, setItem() {} };
+    globalThis.location = { search: '', pathname: '/' };
+    globalThis.history = { replaceState() {} };
+    globalThis.fetch = async (u) => ({ ok: true, json: async () => (u.includes('prices') ? doc : JSON.parse(await readFile(new URL(`../site/${u}`, import.meta.url), 'utf8'))) });
+    const realNow = Date.now;
+    Date.now = () => now;
+    try {
+      await import(`../site/app.js?banner-${tag}`);
+      await new Promise((r) => setTimeout(r, 50));
+    } finally {
+      Date.now = realNow;
+    }
+    return { hidden: elements.get('#banner').hidden, text: elements.get('#bannerText').textContent };
+  };
+
+  const info = await bannerFor(withSources(24, 24), 'fresh');
+  assert.equal(info.hidden, false);
+  assert.match(info.text, /Tom’s Hardware/);
+  const stale = await bannerFor(withSources(24 * 12, 24 * 30), 'stale');
+  assert.equal(stale.hidden, false);
+  assert.match(stale.text, /may be failing/);
 });
 
 test('compare: shared link opens the comparison; tray, differences, remove, cap and clear work', async () => {
@@ -304,4 +349,22 @@ test('deals: strip, count and Deals filter match the deals computed from the dat
   const id = /data-id="([^"]+)"/.exec(strip)[1];
   listeners.get('#deals:click')({ target: { closest: (s) => (s === '.deal-item' ? { dataset: { id } } : null) } });
   assert.match(elements.get('#rows').innerHTML, new RegExp(`data-id="${id}"[^>]*aria-expanded="true"`));
+});
+
+test('"Any" price basis uses the cheaper of new and used', async () => {
+  const { derive, priceOf } = await import('../site/logic.js');
+  const g = { id: 'x', msrp: 500 };
+  const prices = { cards: { x: { new: { price: 600 }, used: { price: 450 } }, y: { new: { price: 300 } } } };
+  assert.equal(priceOf(g, prices, 'any').price, 450);
+  assert.equal(priceOf(g, prices, 'any').kind, 'used');
+  assert.equal(priceOf({ id: 'y' }, prices, 'any').kind, 'new'); // only new available
+  assert.equal(priceOf({ id: 'z' }, prices, 'any'), null);
+  const tie = { cards: { x: { new: { price: 400 }, used: { price: 400 } } } };
+  assert.equal(priceOf(g, tie, 'any').kind, 'new');
+
+  const catalog = JSON.parse(await readFile(new URL('../site/data/gpus.json', import.meta.url), 'utf8'));
+  const live = JSON.parse(await readFile(new URL('../site/data/prices.json', import.meta.url), 'utf8'));
+  const base = { q: '', res: '1440p', work: 'raster', vendors: [], tech: [], minVram: 0, maxPrice: null, minFps: null, segment: 'desktop', sort: 'value', dir: null, rankedOnly: true };
+  const count = (basis) => derive(catalog.gpus, live, { ...base, basis }).rows.length;
+  assert.ok(count('any') >= Math.max(count('new'), count('used'))); // any card with either price is ranked
 });

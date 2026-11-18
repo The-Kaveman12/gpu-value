@@ -28,6 +28,11 @@ export function perfOf(g, { res, work }) {
 /** The price used for value: live eBay new/used, or launch MSRP. */
 export function priceOf(g, prices, basis) {
   if (basis === 'msrp') return g.msrp ? { price: g.msrp, kind: 'msrp' } : null;
+  if (basis === 'any') {
+    // Whichever of the new and used prices is cheaper (new on a tie).
+    const opts = ['new', 'used'].map((c) => priceOf(g, prices, c)).filter(Boolean);
+    return opts.sort((a, b) => a.price - b.price)[0] ?? null;
+  }
   const p = prices?.cards?.[g.id]?.[basis];
   return p ? { ...p, kind: basis } : null;
 }

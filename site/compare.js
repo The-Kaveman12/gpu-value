@@ -58,14 +58,15 @@ export function buildComparison(gpus, { prices, state, money, dealLabel = () => 
   const usd = (p) => (p ? { value: p, text: money(p) } : { value: null, text: '—' });
 
   // Value & price, at the page's current settings.
-  const basisLabel = { new: 'new', used: 'used', msrp: 'MSRP' }[state.basis];
+  const basisLabel = { new: 'new', used: 'used', any: 'cheapest', msrp: 'MSRP' }[state.basis];
   const perf = gpus.map((g) => perfOf(g, state));
   const price = gpus.map((g) => priceOf(g, prices, state.basis));
   add('Value & price', 'FPS per $100', gpus.map((g, i) => (perf[i] && price[i] ? num((perf[i].fps / price[i].price) * 100, (v) => v.toFixed(1)) : num(null))), 'higher');
   add('Value & price', `Price (${basisLabel})`, gpus.map((g, i) => {
     if (!price[i]) return num(null);
     const tag = state.basis === 'msrp' ? '' : dealLabel(g, price[i]);
-    return { value: price[i].price, text: `${money(price[i].price)}${tag ? ` · ${tag}` : ''}` };
+    const cond = state.basis === 'any' ? ` (${price[i].kind})` : '';
+    return { value: price[i].price, text: `${money(price[i].price)}${cond}${tag ? ` · ${tag}` : ''}` };
   }), 'lower');
   add('Value & price', 'New', gpus.map((g) => usd(prices?.cards?.[g.id]?.new?.price)), 'lower');
   add('Value & price', 'Used', gpus.map((g) => usd(prices?.cards?.[g.id]?.used?.price)), 'lower');
